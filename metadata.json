@@ -1,0 +1,6 @@
+{
+  "name": "StudyBuddy AI - Monarch Hunter Study System",
+  "description": "Gamified dark-fantasy hunter study companion with dungeon battles, boss trials, shadow army summons, exam command center, and AI assistant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
