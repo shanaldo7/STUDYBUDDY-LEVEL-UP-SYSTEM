@@ -52,7 +52,7 @@ Instead of treating studying as a simple checklist, StudyBuddy transforms real l
 
 🌐 Live Application
 ⚔️ Ready to Level Up?
-👉 🚀 LAUNCH STUDYBUDDY — NO DOWNLOAD REQUIRED
+👉 🚀 LAUNCH STUDYBUDDY  https://studybuddy-ultimate.ai.studio/ — NO DOWNLOAD REQUIRED
 Open your browser. Start studying. Earn XP. Level up.
 
 ### or if you want to download locally check   ↓  ↓  ↓  ↓  ↓
