@@ -1,19 +1,18 @@
 import React, { useState } from 'react';
-import { HunterUser, AIProviderConfig } from '../types/hunter';
+import { HunterUser, AIProviderConfig, Syllabus } from '../types/hunter';
 import { 
   Bot, 
   Send, 
   Sparkles, 
   Terminal, 
   User, 
-  ShieldCheck, 
-  Flame,
-  Brain,
-  Zap,
   Settings
 } from 'lucide-react';
-import { askHunterGuide, PROVIDERS } from '../utils/gemini';
+import { askHunterGuide } from '../utils/gemini';
 import { soundManager } from '../utils/audio';
+import { getWeakTopics } from '../utils/progressCalculator';
+import { sanitizeSystemGuideResponse } from '../utils/responseSanitizer';
+import { normalizeHunterName } from '../utils/hunterIdentity';
 
 interface Message {
   id: string;
@@ -25,18 +24,25 @@ interface Message {
 interface AIAssistantViewProps {
   user: HunterUser;
   aiConfig?: AIProviderConfig;
+  activeSyllabus?: Syllabus | null;
   onOpenConfig?: () => void;
 }
 
-export const AIAssistantView: React.FC<AIAssistantViewProps> = ({ user, aiConfig, onOpenConfig }) => {
-  const providerMeta = aiConfig ? (PROVIDERS[aiConfig.provider] || PROVIDERS.gemini) : PROVIDERS.gemini;
+export const AIAssistantView: React.FC<AIAssistantViewProps> = ({ 
+  user, 
+  aiConfig, 
+  activeSyllabus,
+  onOpenConfig 
+}) => {
   const hasKey = Boolean(aiConfig?.apiKey && aiConfig.apiKey.trim().length > 3) || aiConfig?.provider === 'ollama';
+  const displayName = normalizeHunterName(user.hunterName);
+  const weakTopics = getWeakTopics(activeSyllabus || null).slice(0, 4);
 
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'init_1',
       sender: 'guide',
-      text: `[SYSTEM PROTOCOL INITIALIZED]\n\nGreetings, Hunter ${user.hunterName}. I am the Tactical System Guide operating via ${providerMeta.name} (${aiConfig?.model || providerMeta.defaultModel}).\n\nI am online to deconstruct difficult theoretical concepts, derive mathematical proofs, and structure high-efficiency cognitive regimens for your upcoming gate trials.\n\nWhat knowledge do you seek to conquer today?`,
+      text: `⚔️ **Welcome, ${displayName}.**\n\nI am your StudyBuddy System Guide.\n\nWhat concept or syllabus topic do you want to master today? You can ask for a definition, exam notes, practice questions, or ask what to study next.`,
       timestamp: new Date().toLocaleTimeString()
     }
   ]);
@@ -44,10 +50,13 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({ user, aiConfig
   const [isLoading, setIsLoading] = useState(false);
 
   const quickPrompts = [
-    "Explain Dijkstra's Algorithm Time Complexity & Heap choice",
-    "Derive the Geometric Meaning of Eigenvalues & Eigenvectors",
-    "How does Brewer's CAP Theorem apply to Raft consensus?",
-    "Monarch Willpower Protocol for mental fatigue"
+    "what is statistoic",
+    "what is mean",
+    "explain statistics in detail",
+    "give me exam answer for statistics",
+    "quiz me on statistics",
+    "what should i study next?",
+    "what is qualitative data"
   ];
 
   const handleSend = async (textToSend?: string) => {
@@ -67,12 +76,22 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({ user, aiConfig
     setIsLoading(true);
 
     try {
-      const response = await askHunterGuide(text, aiConfig);
+      let syllabusSystemContext = '';
+      if (activeSyllabus) {
+        syllabusSystemContext += `Program: ${activeSyllabus.program} (${activeSyllabus.semester})\n`;
+        syllabusSystemContext += `Subjects: ${activeSyllabus.subjects.map(s => s.name).join(', ')}\n`;
+        if (weakTopics.length > 0) {
+          syllabusSystemContext += `Current Focus Topics: ${weakTopics.map(w => `${w.subjectName} → ${w.topicName}`).join(', ')}`;
+        }
+      }
+
+      const response = await askHunterGuide(text, aiConfig, syllabusSystemContext);
       soundManager.playSfx('attack');
+      const cleanText = sanitizeSystemGuideResponse(response);
       const guideMsg: Message = {
         id: `ai_${Date.now()}`,
         sender: 'guide',
-        text: response,
+        text: cleanText,
         timestamp: new Date().toLocaleTimeString()
       };
       setMessages(prev => [...prev, guideMsg]);
@@ -80,7 +99,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({ user, aiConfig
       const fallbackMsg: Message = {
         id: `err_${Date.now()}`,
         sender: 'guide',
-        text: '[SYSTEM NOTICE]: Neural connection interrupted. Review local syllabus notes and retry inquiry.',
+        text: '⚠️ The System Guide is temporarily unable to reach the AI core.\n\nLocal study guidance is still available.',
         timestamp: new Date().toLocaleTimeString()
       };
       setMessages(prev => [...prev, fallbackMsg]);
@@ -103,9 +122,13 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({ user, aiConfig
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-950/40 border border-cyan-500/40 text-xs font-mono-tech text-cyan-300">
-            <span className={`w-2 h-2 rounded-full ${hasKey ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
-            <span>PROVIDER: <b>{providerMeta.name}</b></span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-950/40 border border-cyan-500/30 text-xs font-mono-tech text-cyan-300">
+            <span className={`w-2 h-2 rounded-full ${hasKey ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            <span className="font-semibold tracking-wider">THE SYSTEM GUIDE</span>
+            <span className="text-slate-600">·</span>
+            <span className={hasKey ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
+              {hasKey ? 'ONLINE' : 'LOCAL MODE'}
+            </span>
           </div>
           {onOpenConfig && (
             <button
@@ -184,7 +207,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({ user, aiConfig
                 >
                   <div className="flex items-center justify-between gap-3 text-[10px] font-mono-tech text-slate-500 mb-1.5 pb-1 border-b border-slate-800">
                     <span className={isGuide ? 'text-cyan-400 font-bold' : 'text-slate-300'}>
-                      {isGuide ? 'THE SYSTEM GUIDE' : user.hunterName}
+                      {isGuide ? 'THE SYSTEM GUIDE' : displayName}
                     </span>
                     <span>{m.timestamp}</span>
                   </div>
@@ -207,7 +230,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({ user, aiConfig
               <div className="w-8 h-8 rounded-lg bg-cyan-950/80 border border-cyan-500/50 text-cyan-400 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 animate-spin" />
               </div>
-              <span>SYSTEM COMPUTING TACTICAL DIRECTIVE...</span>
+              <span>SYSTEM GUIDE GENERATING EXPLANATION...</span>
             </div>
           )}
         </div>

@@ -406,21 +406,24 @@ def run_streamlit_app():
         st.markdown(hunter_ui.render_hunter_header("HUNTER SYSTEM AI ASSISTANT", "Tactical AI guidance, concept breakdowns, and study strategies", user["hunter_rank"], user["level"]), unsafe_allow_html=True)
         
         cfg = ai_service.get_active_ai_config(st.session_state.get("ai_config"))
+        user_chosen_model = st.session_state.get("ai_config", {}).get("model") if st.session_state.get("ai_config") else None
+        model_display = user_chosen_model if user_chosen_model else "Automatically selected"
         st.markdown(f"""
         <div style="font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; color: #38bdf8; margin-bottom: 0.75rem;">
-            [ACTIVE PROVIDER: <b>{cfg['provider_name']}</b> | MODEL: <b>{cfg['model']}</b> | KEY: <b>{cfg['masked_key'] if cfg['has_key'] else 'NOT SET (LOCAL HEURISTICS)'}</b>]
+            [PROVIDER: <b>{cfg['provider_name']}</b> | MODEL: <b>{model_display}</b> | KEY: <b>{cfg['masked_key'] if cfg['has_key'] else 'NOT SET (LOCAL HEURISTICS)'}</b>]
         </div>
         """, unsafe_allow_html=True)
 
-        user_prompt = st.text_input("Enter your study query or request tactical analysis:", placeholder="e.g. Explain Dijkstra's Algorithm or Matrix Eigenvalues")
+        user_prompt = st.text_input("Enter your study query or request tactical analysis:", placeholder="e.g. what is statistics or Explain Dijkstra's Algorithm")
         if st.button("CONSULT SYSTEM GUIDE"):
             if user_prompt:
-                with st.spinner("Channeling Hunter System Guide..."):
+                with st.spinner("Consulting System Guide..."):
                     ai_reply = ai_service.query_ai_service(user_prompt, st.session_state.get("ai_config"))
+                    clean_reply = ai_service.sanitize_system_guide_response(ai_reply)
                 st.markdown(f"""
                 <div class="system-dialog">
-                    <div class="system-title">⚔️ SYSTEM INTEL REPORT ({cfg['provider_name']})</div>
-                    <div style="color: #f1f5f9; line-height: 1.6; white-space: pre-wrap; font-size: 0.9rem;">{ai_reply}</div>
+                    <div class="system-title">⚔️ SYSTEM GUIDE ({cfg['provider_name']})</div>
+                    <div style="color: #f1f5f9; line-height: 1.6; white-space: pre-wrap; font-size: 0.9rem;">{clean_reply}</div>
                 </div>
                 """, unsafe_allow_html=True)
 

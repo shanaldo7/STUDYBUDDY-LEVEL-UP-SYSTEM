@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { DungeonGate, HunterUser, QuizQuestion, CombatLog } from '../types/hunter';
+import React, { useState, useEffect } from 'react';
+import { DungeonGate, HunterUser, QuizQuestion, CombatLog, Syllabus, AIProviderConfig } from '../types/hunter';
 import { 
   Swords, 
   ShieldAlert, 
@@ -10,18 +10,27 @@ import {
   XCircle, 
   ArrowLeft,
   Flame,
-  Sparkles
+  Sparkles,
+  Layers,
+  Target,
+  Loader2
 } from 'lucide-react';
 import { soundManager } from '../utils/audio';
+import { generateTopicQuizQuestions } from '../utils/syllabusAI';
+import { normalizeHunterName } from '../utils/hunterIdentity';
 
 interface DungeonBattleViewProps {
   user: HunterUser;
   gates: DungeonGate[];
   questions: QuizQuestion[];
   initialGate?: DungeonGate;
+  activeSyllabus?: Syllabus | null;
+  initialTopicSelection?: { subject: string; unit?: string; topic?: string };
   onVictory: (gate: DungeonGate, xp: number, gold: number) => void;
   onTakeDamage: (amount: number) => void;
+  onRecordTopicActivity?: (subjectName: string, topicName: string, activity: { dungeonCleared?: boolean; quizPassed?: boolean }) => void;
   onBack: () => void;
+  aiConfig?: AIProviderConfig;
 }
 
 export const DungeonBattleView: React.FC<DungeonBattleViewProps> = ({
@@ -29,10 +38,21 @@ export const DungeonBattleView: React.FC<DungeonBattleViewProps> = ({
   gates,
   questions,
   initialGate,
+  activeSyllabus,
+  initialTopicSelection,
   onVictory,
   onTakeDamage,
-  onBack
+  onRecordTopicActivity,
+  onBack,
+  aiConfig
 }) => {
+  // Topic Selector for Syllabus Gates
+  const [topicSubject, setTopicSubject] = useState<string>(initialTopicSelection?.subject || '');
+  const [topicUnit, setTopicUnit] = useState<string>(initialTopicSelection?.unit || '');
+  const [topicName, setTopicName] = useState<string>(initialTopicSelection?.topic || '');
+  const [isForgingGate, setIsForgingGate] = useState<boolean>(false);
+  const [customGateQuestions, setCustomGateQuestions] = useState<QuizQuestion[]>([]);
+
   const [selectedGate, setSelectedGate] = useState<DungeonGate>(initialGate || gates[1]);
   const [inBattle, setInBattle] = useState<boolean>(false);
   const [monsterCurrentHp, setMonsterCurrentHp] = useState<number>(selectedGate.monsterHp);
@@ -46,14 +66,69 @@ export const DungeonBattleView: React.FC<DungeonBattleViewProps> = ({
   const [battleWon, setBattleWon] = useState<boolean>(false);
   const [attackAnimation, setAttackAnimation] = useState<'slash' | 'crit' | 'hit' | null>(null);
 
-  // Filter questions by gate subject or fallback
-  const gateQuestions = questions.filter(
-    q => q.subject.toLowerCase().includes(selectedGate.subject.toLowerCase().split(' ')[0])
-  );
-  const activeQuestions = gateQuestions.length > 0 ? gateQuestions : questions;
+  // Sync initial selection
+  useEffect(() => {
+    if (initialTopicSelection?.subject && initialTopicSelection.topic) {
+      setTopicSubject(initialTopicSelection.subject);
+      setTopicUnit(initialTopicSelection.unit || '');
+      setTopicName(initialTopicSelection.topic);
+      handleSpawnSyllabusGate(
+        initialTopicSelection.subject,
+        initialTopicSelection.unit || 'Unit 1',
+        initialTopicSelection.topic
+      );
+    }
+  }, [initialTopicSelection]);
+
+  const syllabusSubjects = activeSyllabus?.subjects || [];
+  const selectedSubjectObj = syllabusSubjects.find(s => s.name === topicSubject);
+  const availableUnits = selectedSubjectObj?.units || [];
+  const selectedUnitObj = availableUnits.find(u => u.name === topicUnit);
+  const availableTopics = selectedUnitObj?.topics || [];
+
+  const handleSpawnSyllabusGate = async (sub: string, unit: string, topic: string) => {
+    if (!sub || !topic) return;
+    try {
+      setIsForgingGate(true);
+      soundManager.playSfx('levelup');
+
+      const customGate: DungeonGate = {
+        id: `syl_gate_${Date.now()}`,
+        name: `Gate of ${topic}`,
+        rank: 'C',
+        subject: `${sub} · ${topic}`,
+        description: `Dimensional distortion centered on ${topic}. Defeat the guardian to anchor concept mastery.`,
+        monsterName: `${topic.split(' ')[0]} Golem`,
+        monsterHp: 2000,
+        maxHp: 2000,
+        monsterType: 'Cognitive Construct',
+        rewardXp: 250,
+        rewardGold: 150,
+        color: 'border-cyan-500',
+        requiredLevel: 1
+      };
+
+      const generated = await generateTopicQuizQuestions(sub, unit, topic, 4, aiConfig);
+      setCustomGateQuestions(generated);
+      setSelectedGate(customGate);
+      startRaid(customGate, generated);
+    } catch (err) {
+      console.error('Failed to spawn syllabus gate:', err);
+    } finally {
+      setIsForgingGate(false);
+    }
+  };
+
+  // Filter questions by gate subject or custom questions
+  const activeQuestions = customGateQuestions.length > 0 
+    ? customGateQuestions 
+    : (questions.filter(q => q.subject.toLowerCase().includes(selectedGate.subject.toLowerCase().split(' ')[0])).length > 0
+        ? questions.filter(q => q.subject.toLowerCase().includes(selectedGate.subject.toLowerCase().split(' ')[0]))
+        : questions);
+
   const currentQ = activeQuestions[currentQuestionIndex % activeQuestions.length];
 
-  const startRaid = (gate: DungeonGate) => {
+  const startRaid = (gate: DungeonGate, overrideQuestions?: QuizQuestion[]) => {
     soundManager.playSfx('attack');
     setSelectedGate(gate);
     setMonsterCurrentHp(gate.monsterHp);
@@ -114,6 +189,11 @@ export const DungeonBattleView: React.FC<DungeonBattleViewProps> = ({
         soundManager.playSfx('victory');
         setBattleWon(true);
         onVictory(selectedGate, selectedGate.rewardXp, selectedGate.rewardGold);
+
+        if (topicName && onRecordTopicActivity) {
+          onRecordTopicActivity(topicSubject, topicName, { dungeonCleared: true, quizPassed: true });
+        }
+
         setCombatLogs(prev => [
           {
             id: `log_vic_${Date.now()}`,
@@ -143,122 +223,191 @@ export const DungeonBattleView: React.FC<DungeonBattleViewProps> = ({
         ...prev
       ]);
     }
-
-    setTimeout(() => {
-      setAttackAnimation(null);
-    }, 600);
   };
 
-  const handleNextQuestion = () => {
+  const handleNextTurn = () => {
     soundManager.playSfx('click');
     setHasAnswered(false);
     setSelectedOption(null);
+    setAttackAnimation(null);
     setCurrentQuestionIndex(prev => (prev + 1) % activeQuestions.length);
   };
 
+  const handleLeaveDungeon = () => {
+    soundManager.playSfx('click');
+    setInBattle(false);
+    setBattleWon(false);
+    setCustomGateQuestions([]);
+  };
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Top Bar Navigation */}
+    <div className="space-y-6 max-w-7xl mx-auto pb-16">
+      {/* Title Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-cyan-500/20 pb-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={inBattle ? () => setInBattle(false) : onBack}
-            className="p-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/50 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <span className="text-[11px] font-mono-tech text-cyan-400 uppercase tracking-widest font-semibold">
-              {inBattle ? 'DUNGEON COMBAT ACTIVE' : 'DIMENSIONAL GATE RADAR'}
-            </span>
-            <h1 className="font-monarch font-bold text-2xl text-slate-100">
-              {inBattle ? selectedGate.name : 'DUNGEON EXPEDITIONS'}
-            </h1>
-          </div>
+        <div>
+          <span className="text-[11px] font-mono text-cyan-400 uppercase tracking-widest font-semibold">
+            DIMENSIONAL COMBAT PROTOCOL
+          </span>
+          <h1 className="font-rajdhani font-black text-3xl text-slate-100">
+            DUNGEON GATES &amp; COMBAT ARENA
+          </h1>
         </div>
 
         {inBattle && (
-          <div className="flex items-center gap-4">
-            {streakCombo > 1 && (
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold animate-bounce font-mono-tech">
-                <Flame className="w-4 h-4 text-amber-400" />
-                <span>COMBO x{streakCombo}</span>
-              </div>
-            )}
-            <button
-              onClick={() => setInBattle(false)}
-              className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-            >
-              Retreat
-            </button>
-          </div>
+          <button
+            onClick={handleLeaveDungeon}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-rajdhani font-bold cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" /> Retreat from Gate
+          </button>
         )}
       </div>
 
       {!inBattle ? (
-        /* Gate Selection Screen */
         <div className="space-y-6">
-          <p className="text-sm text-slate-300 max-w-3xl">
-            Choose a dimensional gate to raid. Each gate tests your knowledge under combat conditions. 
-            Answering correctly casts high-tier spells that deplete monster HP; inaccurate answers trigger enemy counter-attacks.
-          </p>
+          {/* Syllabus Gate Custom Launcher */}
+          {activeSyllabus && (
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-red-950/40 to-slate-900 border border-red-500/30 space-y-4 shadow-xl">
+              <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-red-300 font-bold">
+                <Swords className="w-4 h-4 text-red-400" />
+                Spawn Topic Dungeon Gate ({activeSyllabus.program} — {activeSyllabus.semester})
+              </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-mono text-slate-400 mb-1">Subject</label>
+                  <select
+                    value={topicSubject}
+                    onChange={(e) => {
+                      setTopicSubject(e.target.value);
+                      setTopicUnit('');
+                      setTopicName('');
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-red-500 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200"
+                  >
+                    <option value="">Select Subject...</option>
+                    {syllabusSubjects.map(s => (
+                      <option key={s.id} value={s.name}>{s.name} ({s.progressPercentage || 0}%)</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-mono text-slate-400 mb-1">Unit / Module</label>
+                  <select
+                    disabled={!topicSubject}
+                    value={topicUnit}
+                    onChange={(e) => {
+                      setTopicUnit(e.target.value);
+                      setTopicName('');
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-red-500 disabled:opacity-50 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200"
+                  >
+                    <option value="">Select Unit...</option>
+                    {availableUnits.map(u => (
+                      <option key={u.id} value={u.name}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-mono text-slate-400 mb-1">Topic</label>
+                  <select
+                    disabled={!topicUnit}
+                    value={topicName}
+                    onChange={(e) => setTopicName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-red-500 disabled:opacity-50 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200"
+                  >
+                    <option value="">Select Topic...</option>
+                    {availableTopics.map(t => (
+                      <option key={t.id} value={t.name}>{t.name} ({t.progress?.progressPercentage || 0}%)</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-xs font-mono text-slate-400">
+                  {topicName ? `Target Topic: ${topicName}` : 'Select a syllabus topic to initiate combat raid.'}
+                </span>
+                <button
+                  disabled={!topicName || isForgingGate}
+                  onClick={() => handleSpawnSyllabusGate(topicSubject, topicUnit, topicName)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 disabled:opacity-50 text-white font-rajdhani font-black text-xs tracking-wide shadow-lg shadow-red-950 transition active:scale-95 cursor-pointer"
+                >
+                  {isForgingGate ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Opening Dimensional Portal...
+                    </>
+                  ) : (
+                    <>
+                      <Swords className="w-3.5 h-3.5" />
+                      Open Syllabus Gate
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Standard Gates Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {gates.map((gate) => {
-              const rankStyles: Record<string, { border: string; glow: string; text: string; bg: string }> = {
-                E: { border: 'border-slate-700', glow: '', text: 'text-slate-400', bg: 'bg-slate-800/40' },
-                D: { border: 'border-emerald-700/60', glow: '', text: 'text-emerald-400', bg: 'bg-emerald-950/30' },
-                C: { border: 'border-cyan-500/40', glow: 'shadow-[0_0_20px_-5px_rgba(6,182,212,0.2)]', text: 'text-cyan-400', bg: 'bg-cyan-950/30' },
-                B: { border: 'border-indigo-500/50', glow: 'shadow-[0_0_25px_-5px_rgba(99,102,241,0.25)]', text: 'text-indigo-400', bg: 'bg-indigo-950/30' },
-                A: { border: 'border-purple-500/60', glow: 'shadow-[0_0_30px_-5px_rgba(168,85,247,0.3)]', text: 'text-purple-400', bg: 'bg-purple-950/40' },
-                S: { border: 'border-red-500/70', glow: 'shadow-[0_0_35px_-5px_rgba(239,68,68,0.35)]', text: 'text-red-400', bg: 'bg-red-950/40' }
-              };
-
-              const style = rankStyles[gate.rank] || rankStyles.E;
-
+              const isLocked = user.level < gate.requiredLevel;
               return (
                 <div
                   key={gate.id}
-                  className={`
-                    glass-panel rounded-xl p-6 border ${style.border} ${style.glow} 
-                    flex flex-col justify-between hover:scale-[1.02] transition-all duration-200 group
-                  `}
+                  className={`rounded-2xl p-6 bg-slate-900/80 border border-slate-800 hover:border-cyan-500/50 flex flex-col justify-between transition shadow-xl relative ${
+                    isLocked ? 'opacity-60 bg-slate-950' : 'hover:scale-[1.02]'
+                  }`}
                 >
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <span className={`px-2.5 py-1 rounded border text-xs font-monarch font-black tracking-wider ${style.text} ${style.bg} ${style.border}`}>
+                      <span className="px-2.5 py-1 rounded-full border text-xs font-rajdhani font-black text-cyan-300 bg-cyan-950/60 border-cyan-500/40">
                         GATE {gate.rank}
                       </span>
-                      <span className="text-xs font-mono-tech text-slate-400">
-                        HP: {gate.monsterHp.toLocaleString()}
-                      </span>
+                      {isLocked ? (
+                        <span className="text-[10px] font-mono text-rose-400 font-bold">
+                          🔒 LV.{gate.requiredLevel} REQUIRED
+                        </span>
+                      ) : (
+                        <span className="text-xs font-mono text-slate-400">
+                          HP: {gate.monsterHp.toLocaleString()}
+                        </span>
+                      )}
                     </div>
 
-                    <h3 className="font-heading font-bold text-xl text-slate-100 group-hover:text-cyan-300 transition-colors">
+                    <h3 className="font-rajdhani font-black text-xl text-white">
                       {gate.name}
                     </h3>
-                    <div className="text-xs text-cyan-400 font-mono-tech mt-1">{gate.subject}</div>
-                    <p className="text-xs text-slate-300 mt-3 leading-relaxed">{gate.description}</p>
+                    <div className="text-xs text-cyan-400 font-mono mt-0.5">{gate.subject}</div>
+                    <p className="text-xs text-slate-300 mt-2 line-clamp-2">{gate.description}</p>
 
-                    <div className="mt-4 p-3 rounded-lg bg-slate-900/60 border border-slate-800 text-xs">
-                      <div className="text-slate-400">Gate Guardian:</div>
+                    <div className="mt-4 p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs">
+                      <div className="text-slate-400 text-[10px] uppercase font-mono">Gate Guardian:</div>
                       <div className="font-bold text-slate-200">{gate.monsterName} ({gate.monsterType})</div>
                     </div>
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between">
-                    <div className="text-xs font-mono-tech">
+                  <div className="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between">
+                    <div className="text-xs font-mono">
                       <span className="text-purple-300 font-bold">+{gate.rewardXp} XP</span>
-                      <span className="text-slate-600 mx-2">·</span>
+                      <span className="text-slate-600 mx-1.5">·</span>
                       <span className="text-amber-300 font-bold">+{gate.rewardGold} G</span>
                     </div>
 
                     <button
+                      disabled={isLocked}
                       onClick={() => startRaid(gate)}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-heading font-bold text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all hover:scale-105"
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-rajdhani font-black text-xs uppercase tracking-wider transition ${
+                        isLocked 
+                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
+                          : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-950 cursor-pointer'
+                      }`}
                     >
                       <Swords className="w-3.5 h-3.5" />
-                      Raid Gate
+                      {isLocked ? `Locked (Lv.${gate.requiredLevel})` : 'Raid Gate'}
                     </button>
                   </div>
                 </div>
@@ -267,211 +416,129 @@ export const DungeonBattleView: React.FC<DungeonBattleViewProps> = ({
           </div>
         </div>
       ) : (
-        /* Battle Arena */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Combat Stage */}
-          <div className="lg:col-span-2 space-y-5">
-            {/* Monster Display & HP Gauge */}
-            <div className={`
-              relative overflow-hidden rounded-xl border border-red-500/40 bg-gradient-to-b from-[#170912] to-[#0d0714] p-6 
-              transition-all duration-300 shadow-[0_0_30px_-5px_rgba(239,68,68,0.25)]
-              ${attackAnimation === 'crit' ? 'ring-4 ring-amber-400/80 scale-[1.01]' : ''}
-              ${attackAnimation === 'slash' ? 'ring-2 ring-cyan-400/60' : ''}
-              ${attackAnimation === 'hit' ? 'animate-shake' : ''}
-            `}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                <div>
-                  <span className="px-2 py-0.5 rounded bg-red-950/80 border border-red-500/40 text-red-300 text-xs font-mono-tech font-bold uppercase">
-                    RANK {selectedGate.rank} MONSTER
-                  </span>
-                  <h2 className="font-heading font-black text-2xl text-slate-100 mt-1">
-                    {selectedGate.monsterName}
-                  </h2>
-                  <div className="text-xs text-slate-400">Class: {selectedGate.monsterType} · Specialty: {selectedGate.subject}</div>
-                </div>
-
-                <div className="text-right">
-                  <div className="font-mono-tech font-bold text-xl text-red-400">
-                    {monsterCurrentHp.toLocaleString()} / {selectedGate.maxHp.toLocaleString()} HP
-                  </div>
-                  <div className="text-[11px] font-mono-tech text-slate-400">
-                    {Math.round((monsterCurrentHp / selectedGate.maxHp) * 100)}% HEALTH
-                  </div>
-                </div>
+        /* Battle Combat Arena */
+        <div className="space-y-6">
+          {/* Monster & Player Health Gauge */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Player Status */}
+            <div className="p-5 rounded-2xl bg-slate-900/90 border border-cyan-500/40 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-rajdhani font-black text-base text-cyan-300">
+                  {normalizeHunterName(user.hunterName)} (Lv.{user.level})
+                </span>
+                <span className="font-mono text-xs text-slate-400">{playerCurrentHp} / 1000 HP</span>
               </div>
-
-              {/* Monster HP Bar */}
-              <div className="h-3 w-full bg-slate-900/90 rounded-full overflow-hidden border border-red-500/40 p-0.5">
+              <div className="w-full bg-slate-950 rounded-full h-3 border border-slate-800 overflow-hidden">
                 <div 
-                  className="h-full bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${(monsterCurrentHp / selectedGate.maxHp) * 100}%` }}
+                  className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full transition-all"
+                  style={{ width: `${Math.max(0, (playerCurrentHp / 1000) * 100)}%` }}
                 />
               </div>
-
-              {/* Player Status In Battle */}
-              <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono-tech">
-                <div className="flex items-center gap-3">
-                  <span className="text-cyan-400 font-bold">{user.hunterName} (LV.{user.level})</span>
-                  <span className="text-slate-500">|</span>
-                  <span className="text-emerald-400">HP: {playerCurrentHp} / 1000</span>
-                </div>
-                <div className="text-cyan-300">
-                  MANA: {user.mana} MP
-                </div>
-              </div>
             </div>
 
-            {/* Battle Victory Modal Overlay */}
-            {battleWon ? (
-              <div className="rounded-xl border border-emerald-500/50 bg-gradient-to-b from-[#091b16] to-[#06120e] p-6 text-center shadow-[0_0_40px_rgba(16,185,129,0.3)]">
-                <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-400 flex items-center justify-center mx-auto mb-3">
-                  <Award className="w-8 h-8" />
-                </div>
-                <h3 className="font-monarch font-black text-2xl text-emerald-300">
-                  DUNGEON GATE CLEARED!
-                </h3>
-                <p className="text-sm text-slate-300 mt-1 max-w-md mx-auto">
-                  {selectedGate.monsterName} has been eradicated. The dimensional rift stabilizes and rewards are transferred to your Hunter inventory.
-                </p>
-
-                <div className="flex items-center justify-center gap-6 my-6 font-mono-tech">
-                  <div className="px-4 py-2 rounded-lg bg-purple-950/50 border border-purple-500/40">
-                    <div className="text-xs text-purple-300">XP GAINED</div>
-                    <div className="text-xl font-bold text-purple-200">+{selectedGate.rewardXp} XP</div>
-                  </div>
-                  <div className="px-4 py-2 rounded-lg bg-amber-950/50 border border-amber-500/40">
-                    <div className="text-xs text-amber-300">GOLD ACQUIRED</div>
-                    <div className="text-xl font-bold text-amber-200">+{selectedGate.rewardGold} G</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-center gap-3">
-                  <button
-                    onClick={() => startRaid(selectedGate)}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-heading font-bold text-sm tracking-wider uppercase transition-colors"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    Raid Again
-                  </button>
-                  <button
-                    onClick={() => setInBattle(false)}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-heading font-bold text-sm tracking-wider uppercase shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all"
-                  >
-                    Return to Gates
-                  </button>
-                </div>
+            {/* Monster Status */}
+            <div className="p-5 rounded-2xl bg-slate-900/90 border border-red-500/40 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-rajdhani font-black text-base text-red-300">
+                  {selectedGate.monsterName}
+                </span>
+                <span className="font-mono text-xs text-slate-400">{monsterCurrentHp} / {selectedGate.monsterHp} HP</span>
               </div>
-            ) : (
-              /* Question Box / Offensive Spell Selection */
-              <div className="glass-panel rounded-xl p-6 border border-cyan-500/30">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-mono-tech text-cyan-400 uppercase tracking-widest font-semibold">
-                    SPELL CHANNELING TRIAL #{currentQuestionIndex + 1}
-                  </span>
-                  <span className="text-xs font-mono-tech text-slate-400">
-                    {currentQ.subject}
-                  </span>
-                </div>
-
-                <h3 className="font-heading font-bold text-lg text-slate-100 leading-snug">
-                  {currentQ.question}
-                </h3>
-
-                {/* Answer Options */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
-                  {currentQ.options.map((opt, idx) => {
-                    const isSelected = selectedOption === idx;
-                    const isCorrectOpt = idx === currentQ.correctIndex;
-                    
-                    let btnStyle = 'bg-slate-900/80 border-slate-700/80 hover:border-cyan-500/50 hover:bg-slate-800/80 text-slate-200';
-                    if (hasAnswered) {
-                      if (isCorrectOpt) {
-                        btnStyle = 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.3)]';
-                      } else if (isSelected) {
-                        btnStyle = 'bg-red-950/80 border-red-500 text-red-200';
-                      } else {
-                        btnStyle = 'bg-slate-900/40 border-slate-800 text-slate-500 opacity-60';
-                      }
-                    }
-
-                    return (
-                      <button
-                        key={idx}
-                        disabled={hasAnswered}
-                        onClick={() => handleSelectOption(idx)}
-                        className={`
-                          p-3.5 rounded-lg border text-left text-sm font-medium transition-all duration-200 flex items-center justify-between
-                          ${btnStyle}
-                        `}
-                      >
-                        <span className="flex items-center gap-2">
-                          <span className="font-mono-tech text-xs text-slate-500 font-bold">
-                            [{String.fromCharCode(65 + idx)}]
-                          </span>
-                          <span>{opt}</span>
-                        </span>
-                        {hasAnswered && isCorrectOpt && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
-                        {hasAnswered && isSelected && !isCorrectOpt && <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Explanation Box After Answer */}
-                {hasAnswered && (
-                  <div className={`mt-5 p-4 rounded-lg border ${isCorrect ? 'bg-emerald-950/30 border-emerald-500/40' : 'bg-red-950/30 border-red-500/40'} transition-all`}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className={`text-xs font-mono-tech font-bold uppercase ${isCorrect ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {isCorrect ? '✓ ATTACK SUCCESSFUL - TACTICAL EXPLANATION' : '✗ SPELL COUNTERED - SOLUTION ANALYSIS'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      {currentQ.explanation}
-                    </p>
-
-                    <div className="mt-3 flex justify-end">
-                      <button
-                        onClick={handleNextQuestion}
-                        className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-heading font-bold text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all"
-                      >
-                        Next Combat Trial →
-                      </button>
-                    </div>
-                  </div>
-                )}
+              <div className="w-full bg-slate-950 rounded-full h-3 border border-slate-800 overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-500 to-red-500 rounded-full transition-all"
+                  style={{ width: `${Math.max(0, (monsterCurrentHp / selectedGate.monsterHp) * 100)}%` }}
+                />
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Combat Log Sidebar */}
-          <div className="lg:col-span-1 glass-panel rounded-xl p-5 border border-cyan-500/20 flex flex-col h-[520px]">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
-              <span className="text-xs font-mono-tech text-cyan-400 uppercase tracking-widest font-semibold flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5" /> COMBAT FEED
-              </span>
-              <span className="text-[10px] font-mono-tech text-slate-500">REALTIME</span>
-            </div>
+          {/* Combat Question Card */}
+          {!battleWon ? (
+            <div className="rounded-2xl p-6 md:p-8 bg-slate-900/90 border border-cyan-500/40 shadow-2xl space-y-6">
+              <div className="flex items-center justify-between">
+                <span className="px-3 py-1 rounded-full bg-indigo-950/80 border border-indigo-500/40 text-indigo-300 text-xs font-mono font-bold">
+                  SPELL CASTING TRIAL #{currentQuestionIndex + 1}
+                </span>
+                <span className="text-xs font-mono text-slate-400">
+                  Streak: <b className="text-cyan-400">{streakCombo}x Combo</b>
+                </span>
+              </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 text-xs font-mono-tech">
-              {combatLogs.length === 0 ? (
-                <div className="text-slate-500 text-center py-8 italic">Awaiting first offensive spell...</div>
-              ) : (
-                combatLogs.map((log) => {
-                  let badge = 'text-slate-400 border-slate-700';
-                  if (log.type === 'player-hit') badge = 'text-cyan-300 border-cyan-500/40 bg-cyan-950/30';
-                  if (log.type === 'monster-hit') badge = 'text-red-400 border-red-500/40 bg-red-950/30';
-                  if (log.type === 'loot') badge = 'text-amber-300 border-amber-500/40 bg-amber-950/30';
-                  if (log.type === 'system') badge = 'text-purple-300 border-purple-500/40 bg-purple-950/30';
+              <h2 className="font-rajdhani font-black text-2xl text-slate-100">
+                {currentQ?.question}
+              </h2>
+
+              <div className="space-y-3">
+                {(currentQ?.options || []).map((opt, idx) => {
+                  const isSel = selectedOption === idx;
+                  const isCor = idx === currentQ.correctIndex;
+                  let style = 'bg-slate-950 border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 text-slate-200';
+                  if (hasAnswered) {
+                    if (isCor) style = 'bg-emerald-950/80 border-emerald-500 text-emerald-200';
+                    else if (isSel) style = 'bg-red-950/80 border-red-500 text-red-200';
+                    else style = 'bg-slate-950/40 border-slate-900 text-slate-500 opacity-60';
+                  }
 
                   return (
-                    <div key={log.id} className={`p-2 rounded border ${badge}`}>
-                      <div className="text-[10px] text-slate-500 mb-0.5">{log.timestamp}</div>
-                      <div className="leading-snug">{log.message}</div>
-                    </div>
+                    <button
+                      key={idx}
+                      disabled={hasAnswered}
+                      onClick={() => handleSelectOption(idx)}
+                      className={`w-full p-4 rounded-xl border text-left text-sm font-medium transition-all flex items-center justify-between cursor-pointer ${style}`}
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="font-mono text-xs text-slate-500 font-bold">[{String.fromCharCode(65 + idx)}]</span>
+                        <span className="font-sans">{opt}</span>
+                      </span>
+                      {hasAnswered && isCor && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />}
+                      {hasAnswered && isSel && !isCor && <XCircle className="w-5 h-5 text-red-400 shrink-0" />}
+                    </button>
                   );
-                })
+                })}
+              </div>
+
+              {hasAnswered && (
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={handleNextTurn}
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-rajdhani font-black text-xs uppercase tracking-wider cursor-pointer"
+                  >
+                    Cast Next Spell →
+                  </button>
+                </div>
               )}
             </div>
+          ) : (
+            <div className="p-8 rounded-2xl bg-gradient-to-b from-cyan-950/50 to-slate-900 border border-cyan-500/50 text-center space-y-4 shadow-2xl">
+              <Sparkles className="w-12 h-12 text-cyan-400 mx-auto animate-pulse" />
+              <h2 className="text-3xl font-black font-rajdhani text-white">
+                DUNGEON GATE CLEARED!
+              </h2>
+              <p className="text-sm text-slate-300 max-w-md mx-auto">
+                The dimensional guardian has been vanquished. Concept mastery recorded and rewards credited.
+              </p>
+              <div className="flex items-center justify-center gap-4 text-sm font-mono font-bold">
+                <span className="text-purple-400">+{selectedGate.rewardXp} XP</span>
+                <span className="text-amber-400">+{selectedGate.rewardGold} Gold</span>
+              </div>
+              <button
+                onClick={handleLeaveDungeon}
+                className="mt-4 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-rajdhani font-black text-sm tracking-wide shadow-xl cursor-pointer"
+              >
+                Return to Command Deck
+              </button>
+            </div>
+          )}
+
+          {/* Combat Logs */}
+          <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-2 max-h-48 overflow-y-auto font-mono text-xs">
+            <div className="text-[10px] uppercase text-slate-500 tracking-wider font-bold">Combat Log Feed:</div>
+            {combatLogs.map(log => (
+              <div key={log.id} className="text-slate-400">
+                <span className="text-slate-600">[{log.timestamp}]</span> {log.message}
+              </div>
+            ))}
           </div>
         </div>
       )}

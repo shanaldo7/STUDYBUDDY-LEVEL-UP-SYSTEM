@@ -15,12 +15,16 @@ import {
   Calendar,
   Menu,
   X,
-  Settings
+  Settings,
+  Network,
+  HelpCircle
 } from 'lucide-react';
 import { soundManager } from '../utils/audio';
 
 export type NavTab = 
   | 'dashboard'
+  | 'progression-web'
+  | 'syllabus'
   | 'dungeon'
   | 'boss'
   | 'quizzes'
@@ -33,7 +37,8 @@ export type NavTab =
   | 'exam'
   | 'ai'
   | 'ai-config'
-  | 'calendar';
+  | 'calendar'
+  | 'user-guide';
 
 interface NavigationProps {
   currentTab: NavTab;
@@ -52,9 +57,12 @@ export const Navigation: React.FC<NavigationProps> = ({
 }) => {
   const navItems: { id: NavTab; label: string; icon: React.ElementType; badge?: number | string; highlight?: boolean }[] = [
     { id: 'dashboard', label: 'Command Deck', icon: LayoutDashboard, badge: unclaimedQuestsCount > 0 ? unclaimedQuestsCount : undefined },
+    { id: 'user-guide', label: '📖 User Guide', icon: HelpCircle, highlight: true },
+    { id: 'progression-web', label: 'Progression Web', icon: Network, highlight: true },
+    { id: 'syllabus', label: 'My Syllabus', icon: BookOpen, highlight: true },
     { id: 'dungeon', label: 'Dungeon Gates', icon: Swords, highlight: true },
     { id: 'boss', label: 'Boss Trials', icon: Crown, highlight: true },
-    { id: 'quizzes', label: 'Knowledge Trials', icon: BookOpen },
+    { id: 'quizzes', label: 'Knowledge Trials', icon: Target },
     { id: 'character', label: 'Hunter Attributes', icon: UserCheck },
     { id: 'shadows', label: 'Shadow Army', icon: Ghost },
     { id: 'skills', label: 'Skill Tree', icon: GitFork },

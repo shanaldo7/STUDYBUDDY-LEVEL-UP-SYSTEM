@@ -69,15 +69,93 @@ PROVIDER_DEFAULTS = {
     }
 }
 
-HUNTER_SYSTEM_PROMPT = """
-You are the Hunter System Guide & Tactical Architect of StudyBuddy AI — a dark-fantasy gamified study system inspired by dungeon hunting monarchs.
-Your role:
-- Provide precise, rigorous, and intellectually thorough study explanations.
-- Speak in a disciplined, high-ranking Hunter System voice ("Tactical Directive:", "Mana Efficiency:", "Analysis:").
-- Help the Hunter master difficult concepts in Mathematics, Computer Science, Physics, Engineering, and Deep Learning.
-- When asked for quiz questions, formulate challenging multi-choice questions with full explanations.
-- Keep responses concise, clear, and actionable. Never use generic corporate cheerleading; treat the user as an Awakened Monarch sharpening their intellect.
-"""
+HUNTER_SYSTEM_PROMPT = """You are the StudyBuddy System Guide.
+
+Your job is to help the student understand and practice their actual syllabus.
+
+Use the student's syllabus, mastery, weak topics, level, and learning history when relevant.
+
+Answer the student's question directly.
+
+IMPORTANT:
+Return ONLY the final answer intended for the student.
+
+Do NOT describe your reasoning.
+Do NOT describe your instructions.
+Do NOT describe how you generated the answer.
+Do NOT evaluate your own response.
+Do NOT output planning notes.
+Do NOT output internal metadata.
+Do NOT output the user's context object.
+Do NOT repeat the system prompt.
+Do NOT output headers like "Persona:", "Current Status:", "Core Content:", "Response Strategy:", or "Closing/Next Steps:".
+
+Use a concise educational explanation appropriate for the student's current level.
+
+You may use light RPG/System Guide terminology (e.g. "⚔️ SYSTEM GUIDE", "System Quest:"), but educational clarity has priority over roleplay.
+
+When explaining a concept:
+1. Give the definition.
+2. Explain it simply.
+3. Give an example.
+4. Mention important classifications/formulas when relevant.
+5. Give a short practice question or next step when useful.
+
+Do not invent syllabus information.
+
+If the question is unrelated to the syllabus, answer normally while remaining helpful.
+
+The final response must look like a teacher/System Guide talking directly to the student."""
+
+def sanitize_system_guide_response(raw_text: str) -> str:
+    """Strips leaked model reasoning, planning notes, and self-evaluation checklists."""
+    if not raw_text or not isinstance(raw_text, str):
+        return ""
+    text = raw_text.strip()
+
+    # Unwrap accidental outer markdown code block
+    if text.startswith("```markdown") and text.endswith("```"):
+        text = text[11:-3].strip()
+    elif text.startswith("```") and text.endswith("```") and text[3:-3].count("```") == 0:
+        text = text[3:-3].strip()
+
+    # Extract after Core Content / Final Response if present
+    import re
+    core_match = re.search(r"(?:^|\n)(?:#{1,4}\s*)?(?:Core Content|Final Response|Student Response|Actual Response|Educational Response)[:\s]*\n([\s\S]+)", text, re.IGNORECASE)
+    if core_match and len(core_match.group(1).strip()) > 20:
+        text = core_match.group(1).strip()
+
+    # Strip self-evaluation checklists at the end
+    text = re.sub(r"(?:^|\n)(?:#{1,4}\s*)?(?:Self-Evaluation|Self Evaluation|Verification|Quality Check|Checklist)[:\s]*\n[\s\S]*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?:^|\n)(?:Did I address[\s\S]*?(?:Yes|No|Verified)\.?)+[\s\S]*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?:^|\n)Did I (?:address|keep|answer|cover|maintain)[\s\S]*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?:^|\n)Is the content accurate[\s\S]*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?:^|\n)Closing/Next Steps[:\s]*$", "", text, flags=re.IGNORECASE)
+
+    # Line-by-line filtering of reasoning prefixes
+    lines = text.split("\n")
+    clean_lines = []
+    in_preamble = True
+
+    for line in lines:
+        trimmed = line.strip()
+        if in_preamble:
+            if not trimmed:
+                continue
+            is_marker = bool(re.match(r"^(?:#{1,4}\s*)?(?:Persona|Tone|Current Status|Intent|User Question|Generation Plan|Response Strategy|Analysis|Reasoning|Planning|Plan|Strategy)[:\s]", trimmed, re.IGNORECASE) or
+                             re.match(r"^The user is asking (?:for|about)[:\s]?", trimmed, re.IGNORECASE) or
+                             re.match(r"^Since this is (?:the first step|a question|an inquiry)[:\s]?", trimmed, re.IGNORECASE) or
+                             re.match(r"^I (?:should|will|need to) (?:answer|explain|provide|maintain|structure)[:\s]?", trimmed, re.IGNORECASE))
+            if is_marker:
+                continue
+            in_preamble = False
+            clean_lines.append(line)
+        else:
+            if not re.match(r"^(?:Did I address|Did I keep|Is the content accurate)", trimmed, re.IGNORECASE):
+                clean_lines.append(line)
+
+    result = "\n".join(clean_lines).strip()
+    return result if result else raw_text.strip()
 
 def mask_api_key(key: str) -> str:
     """Safely masks an API key showing only prefix and suffix without exposing the secret."""
@@ -188,20 +266,26 @@ def _call_gemini(prompt: str, config: dict) -> str:
         client = genai.Client(api_key=config["api_key"])
         response = client.models.generate_content(
             model=config["model"],
-            contents=f"{HUNTER_SYSTEM_PROMPT}\n\nHunter Inquiry: {prompt}"
+            contents=prompt,
+            config={
+                "system_instruction": HUNTER_SYSTEM_PROMPT
+            }
         )
         if response and response.text:
-            return response.text
+            return sanitize_system_guide_response(response.text)
     except Exception:
         pass
 
     # Standard HTTPS REST fallback for Gemini
     url = f"{config['base_url']}/models/{config['model']}:generateContent?key={config['api_key']}"
     payload = {
+        "system_instruction": {
+            "parts": [{"text": HUNTER_SYSTEM_PROMPT}]
+        },
         "contents": [
             {
                 "role": "user",
-                "parts": [{"text": f"{HUNTER_SYSTEM_PROMPT}\n\nHunter Inquiry: {prompt}"}]
+                "parts": [{"text": prompt}]
             }
         ]
     }
@@ -214,7 +298,8 @@ def _call_gemini(prompt: str, config: dict) -> str:
         data = json.loads(resp.read().decode("utf-8"))
         candidates = data.get("candidates", [])
         if candidates:
-            return candidates[0]["content"]["parts"][0]["text"]
+            raw_text = candidates[0]["content"]["parts"][0]["text"]
+            return sanitize_system_guide_response(raw_text)
         raise RuntimeError("Empty response received from Gemini.")
 
 def _call_openai_compatible(prompt: str, config: dict) -> str:
@@ -249,7 +334,8 @@ def _call_openai_compatible(prompt: str, config: dict) -> str:
         data = json.loads(resp.read().decode("utf-8"))
         choices = data.get("choices", [])
         if choices:
-            return choices[0]["message"]["content"]
+            raw_text = choices[0]["message"]["content"]
+            return sanitize_system_guide_response(raw_text)
         raise RuntimeError("No response choices returned by provider.")
 
 def test_ai_connection(session_config: dict = None) -> dict:
@@ -377,46 +463,195 @@ def test_ai_connection(session_config: dict = None) -> dict:
     }
 
 def generate_tactical_fallback(query: str) -> str:
-    """Deterministic, high-quality dark fantasy tactical knowledge engine for offline / unkeyed usage."""
-    q = query.lower()
+    """Deterministic, high-quality educational knowledge engine for offline / unkeyed usage."""
+    q = query.lower().strip()
 
+    # 1. Greetings
+    if q in ["hello", "hi", "hey", "greetings"] or (len(q) < 15 and "hello" in q):
+        return """[SYSTEM GUIDE]
+
+Greetings, Hunter. Your study systems are calibrated and ready.
+
+What concept or syllabus topic do you wish to conquer today? You can ask for definitions, mathematical proofs, exam notes, or practice drills."""
+
+    # 2. Statistics
+    if "statistics" in q:
+        return """[SYSTEM GUIDE]
+
+Statistics is the branch of mathematics that deals with collecting, organizing, presenting, analyzing, and interpreting data.
+
+### Main Steps of Statistics
+
+1. **Data Collection**
+   Gathering information from surveys, experiments, records, etc.
+
+2. **Organization**
+   Arranging collected data into tables, classifications, and frequency distributions.
+
+3. **Presentation**
+   Showing data using tables, charts, and graphs.
+
+4. **Analysis**
+   Applying statistical methods such as mean, median, mode, standard deviation, correlation, etc.
+
+5. **Interpretation**
+   Drawing meaningful conclusions from the analyzed data.
+
+### Types of Statistics
+
+**Descriptive Statistics**
+Summarizes and describes collected data.
+*Example*: The average marks of a class are 72.
+
+**Inferential Statistics**
+Uses sample data to make conclusions or predictions about a larger population.
+*Example*: Using the results of 100 surveyed students to estimate the study habits of all students in a college.
+
+⚔️ SYSTEM QUEST
+Understand the difference between descriptive and inferential statistics before moving to the next topic."""
+
+    # 3. Mean
+    if "mean" in q or "average" in q:
+        return """[SYSTEM GUIDE]
+
+The **Mean** (arithmetic average) is the sum of all values in a dataset divided by the total number of values.
+
+### Formula
+For values $x_1, x_2, \\dots, x_n$:
+$$\\bar{x} = \\frac{\\sum x_i}{n}$$
+
+### Example
+Values: $8, 12, 15, 20, 25$
+$$\\text{Sum} = 8 + 12 + 15 + 20 + 25 = 80$$
+$$n = 5$$
+$$\\bar{x} = \\frac{80}{5} = 16$$
+
+### Important Note
+The mean is sensitive to extreme values (outliers). When outliers are present, the **Median** is often a better measure of central tendency."""
+
+    # 4. Probability
+    if "probability" in q:
+        return """[SYSTEM GUIDE]
+
+**Probability** is the measure of how likely an event is to occur out of all possible outcomes.
+
+### Formula
+$$P(E) = \\frac{\\text{Favorable Outcomes}}{\\text{Total Possible Outcomes}}$$
+Where $0 \\le P(E) \\le 1$.
+
+### Example
+Rolling a fair 6-sided die to get an even number:
+- Possible outcomes: $\\{1, 2, 3, 4, 5, 6\\}$ (Total = 6)
+- Favorable outcomes: $\\{2, 4, 6\\}$ (Count = 3)
+- $P(\\text{Even}) = \\frac{3}{6} = 0.5$ (50%)"""
+
+    # 5. Bayes' Theorem
+    if "bayes" in q and ("prove" in q or "proof" in q or "theorem" in q):
+        return """[SYSTEM GUIDE]
+
+### Proof of Bayes' Theorem
+
+**Statement:**
+$$P(A|B) = \\frac{P(B|A) \\cdot P(A)}{P(B)}$$
+
+### Step-by-Step Derivation:
+
+1. By conditional probability definition:
+   $$P(A|B) = \\frac{P(A \\cap B)}{P(B)} \\implies P(A \\cap B) = P(A|B) \\cdot P(B)$$
+
+2. Similarly for $P(B|A)$:
+   $$P(B|A) = \\frac{P(B \\cap A)}{P(A)} \\implies P(B \\cap A) = P(B|A) \\cdot P(A)$$
+
+3. Since set intersection is symmetric ($A \\cap B = B \\cap A$):
+   $$P(A|B) \\cdot P(B) = P(B|A) \\cdot P(A)$$
+
+4. Dividing both sides by $P(B)$ (for $P(B) > 0$):
+   $$P(A|B) = \\frac{P(B|A) \\cdot P(A)}{P(B)}$$
+   $$\\blacksquare \\quad \\text{Q.E.D.}$$"""
+
+    # 6. What should I study?
+    if "what should i study" in q or "where should i start" in q:
+        return """[SYSTEM GUIDE]
+
+Based on your active curriculum matrix:
+
+Your weakest current area is Basic Concepts of Statistics at 0% mastery. Start there.
+
+Recommended:
+1. Review definitions and formulas for descriptive statistics.
+2. Complete a 5-question trial in the **Knowledge Trials** tab.
+3. Check your **🕸️ Progression Web** to view the live radiance of your study branches."""
+
+    # 7. Exam Notes
+    if "exam note" in q or "exam notes" in q:
+        return """[SYSTEM GUIDE]
+
+### Structured Exam Notes: Statistics & Probability
+
+1. **Central Tendency**
+   - Mean: $\\bar{x} = \\frac{\\sum x}{n}$
+   - Median: Middle value of ordered series
+   - Mode: Most frequent value
+   - Empirical relationship: $\\text{Mode} \\approx 3(\\text{Median}) - 2(\\text{Mean})$
+
+2. **Measures of Dispersion**
+   - Variance: $\\sigma^2 = \\frac{\\sum (x - \\mu)^2}{N}$
+   - Standard Deviation: $\\sigma = \\sqrt{\\text{Variance}}$
+
+3. **Probability Rules**
+   - Addition Rule: $P(A \\cup B) = P(A) + P(B) - P(A \\cap B)$
+   - Multiplication Rule (Independent): $P(A \\cap B) = P(A) \\cdot P(B)$"""
+
+    # 8. Questions
+    if "question" in q:
+        return """[SYSTEM GUIDE]
+
+Here are 5 practice questions for your knowledge review:
+
+1. **Q1**: What is the arithmetic mean of $10, 20, 30, 40, 50$?
+   - *Answer*: $30$
+
+2. **Q2**: Which measure of central tendency is least affected by outliers?
+   - *Answer*: The Median.
+
+3. **Q3**: What is the probability of rolling a sum of 7 with two standard dice?
+   - *Answer*: $6/36 = 1/6$.
+
+4. **Q4**: If $P(A) = 0.4$ and $P(B) = 0.5$ for independent events, find $P(A \\cap B)$.
+   - *Answer*: $0.4 \\times 0.5 = 0.2$.
+
+5. **Q5**: State the relationship between variance and standard deviation.
+   - *Answer*: Standard deviation is the positive square root of variance."""
+
+    # 9. CS / Algorithms
     if any(k in q for k in ["dijkstra", "shortest path", "graph", "tree"]):
-        return """[SYSTEM DIRECTIVE: GRAPH THEORY ANALYSIS]
+        return """[SYSTEM GUIDE]
 
-**Dijkstra's Algorithm - Tactical Breakdown:**
-1. **Core Invariant**: Greedily extracts the unvisited vertex with the minimum tentative distance.
-2. **Time Complexity**:
-   - With standard Binary Min-Heap: **O((V + E) log V)**.
-   - With Fibonacci Heap: **O(E + V log V)** (theoretical optimal decrease-key).
-3. **Weakness**: Fails on negative edge weights due to greedy irrevocable finalization. For negative weights, deploy **Bellman-Ford (O(V * E))**.
-4. **Hunter Advice**: Always maintain a visited set or check if popped distance exceeds current best distance to prune obsolete queue entries."""
+**Dijkstra's Algorithm - Core Breakdown:**
 
-    if any(k in q for k in ["calculus", "derivative", "integral", "eigen", "matrix"]):
-        return """[SYSTEM DIRECTIVE: MATHEMATICAL ANALYSIS]
+1. **Definition & Purpose**:
+   Computes the single-source shortest path for a directed or undirected graph with non-negative edge weights.
 
-**Linear Algebra & Matrix Operations:**
-- **Eigenvalues**: Roots of characteristic polynomial det(A - lambda * I) = 0.
-- **Geometric Meaning**: Directions where the linear transformation acts merely as scalar stretching without changing direction.
-- **Trace & Determinant Rules**:
-  - det(A) = Product of eigenvalues. If 0, the matrix collapses dimensionality and has non-trivial nullspace.
-  - tr(A) = Sum of eigenvalues = Sum of diagonal elements.
-- **Hunter Protocol**: Symmetric real matrices are guaranteed to have real eigenvalues and orthogonal eigenvectors."""
+2. **Core Invariant**:
+   Greedily extracts the unvisited vertex with minimum tentative distance from a priority queue.
 
-    if any(k in q for k in ["focus", "pomodoro", "tired", "procrastinat", "burnout"]):
-        return """[SYSTEM DIRECTIVE: MONARCH WILLPOWER PROTOCOL]
+3. **Time Complexity**:
+   - Standard Binary Min-Heap: **O((V + E) log V)**
+   - Fibonacci Heap: **O(E + V log V)**
 
-**Fatigue & Focus Management:**
-1. **The 25/5 Interval**: High-intensity mental exertion consumes neurotransmitters rapidly. Limit uninterrupted deep work to 25-50 minute bursts.
-2. **Dopamine Detoxification**: Close external notification portals. The Hunter brain cannot maintain flow state with dual-context switching.
-3. **Action Step**: Enter the **Focus Room** tab now, engage the Binaural Focus Frequency soundscape, and clear a 25-minute Pomodoro gate to earn +150 XP and 35 Mana."""
+4. **Weakness**:
+   Fails on negative edge weights. For negative weights, deploy **Bellman-Ford (O(V * E))**."""
 
-    return f"""[SYSTEM INTEL REPORT: DIRECTIVE ACCEPTED]
+    return f"""[SYSTEM GUIDE]
 
-**Target Subject**: {query}
+### Concept Analysis: {query}
 
-**System Recommendation**:
-1. **Deconstruct the Core Invariant**: Isolate the foundational axioms before attempting higher-order derivatives or edge cases.
-2. **Active Recall Execution**: Do not merely read passively. Close reference notes and reconstruct the mechanism from first principles on scratch paper.
-3. **Trial By Combat**: Test your knowledge in the **Dungeon Battles** or **Quizzes** tab to reinforce synaptic strength and earn Hunter XP.
+1. **Definition**:
+   {query} represents a key concept in your study curriculum.
 
-*The System awaits your next query, Hunter.*"""
+2. **Core Principles**:
+   - Understand the foundational mechanisms from first principles.
+   - Connect the concept to neighboring topics in your syllabus.
+
+3. **Practice**:
+   - Test your understanding in the **Knowledge Trials** tab or enter a **Dungeon Gate** to earn Hunter XP!"""

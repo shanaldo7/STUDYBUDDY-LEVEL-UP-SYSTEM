@@ -1,5 +1,5 @@
 import React from 'react';
-import { HunterUser, DailyQuest, DungeonGate } from '../types/hunter';
+import { HunterUser, DailyQuest, DungeonGate, Syllabus } from '../types/hunter';
 import { 
   Swords, 
   Crown, 
@@ -10,18 +10,26 @@ import {
   Plus,
   Flame,
   Brain,
-  Repeat
+  Repeat,
+  BookOpen,
+  Target,
+  AlertTriangle,
+  Network
 } from 'lucide-react';
 import { soundManager } from '../utils/audio';
 import { ScrollReveal } from './ScrollReveal';
+import { getWeakTopics } from '../utils/progressCalculator';
+import { normalizeHunterName } from '../utils/hunterIdentity';
+import { NavTab } from './Navigation';
 
 interface DashboardViewProps {
   user: HunterUser;
   dailyQuests: DailyQuest[];
   gates: DungeonGate[];
+  activeSyllabus?: Syllabus | null;
   onClaimQuest: (questId: string) => void;
   onSelectGate: (gate: DungeonGate) => void;
-  onNavigate: (tab: 'dungeon' | 'boss' | 'focus' | 'character' | 'revision') => void;
+  onNavigate: (tab: NavTab) => void;
   onAllocateStat: (statName: keyof HunterUser['stats']) => void;
   onTriggerLevelUpPreview?: () => void;
 }
@@ -30,6 +38,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   user,
   dailyQuests,
   gates,
+  activeSyllabus,
   onClaimQuest,
   onSelectGate,
   onNavigate,
@@ -51,6 +60,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     { key: 'sense', label: 'Sense', desc: 'Intuition & Error Spotting', icon: '👁️' }
   ];
 
+  const weakTopics = getWeakTopics(activeSyllabus || null).slice(0, 3);
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* System Awakening Banner / Directive */}
@@ -69,39 +80,88 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 HUNTER COMMAND DECK
               </h1>
               <p className="text-sm text-slate-300 max-w-2xl mt-1">
-                Active Gates detected across your syllabus. Sharpen cognitive faculties, defeat dungeon sentinels with exact recall, and extract shadow soldiers to augment your intellect.
+                {activeSyllabus 
+                  ? `Active Syllabus: ${activeSyllabus.program} (${activeSyllabus.semester}) — ${activeSyllabus.progressPercentage || 0}% Mastery. Defeat dungeon sentinels and conquer quizzes to level up.`
+                  : 'Configure your course syllabus to construct your personalized hunter learning realm.'}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
               <button
-                onClick={() => onNavigate('dungeon')}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-heading font-bold text-sm tracking-wider uppercase shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all hover:scale-[1.02] active:scale-[0.98]"
+                onClick={() => onNavigate('user-guide')}
+                className="flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-cyan-500/20 hover:from-amber-500/30 hover:to-cyan-500/30 text-amber-300 border border-amber-500/40 font-heading font-bold text-sm tracking-wider uppercase shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
               >
-                <Swords className="w-4 h-4" />
-                Enter Dungeon Gate
+                Need Help? 📖
+              </button>
+              <button
+                onClick={() => onNavigate('progression-web')}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-950 via-[#0d1c3a] to-purple-950/80 hover:from-cyan-900 hover:to-purple-900 text-cyan-300 border border-cyan-500/40 font-heading font-bold text-sm tracking-wider uppercase shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              >
+                <Network className="w-4 h-4 text-cyan-400" />
+                Progression Web
+              </button>
+              <button
+                onClick={() => onNavigate('syllabus')}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-heading font-bold text-sm tracking-wider uppercase shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              >
+                <BookOpen className="w-4 h-4" />
+                {activeSyllabus ? 'My Syllabus' : '+ Add Syllabus'}
+              </button>
+              <button
+                onClick={() => onNavigate('dungeon')}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500 text-slate-200 font-heading font-bold text-sm tracking-wider uppercase transition-all hover:scale-[1.02] cursor-pointer"
+              >
+                <Swords className="w-4 h-4 text-cyan-400" />
+                Dungeon Gate
               </button>
               <button
                 onClick={() => onNavigate('boss')}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-purple-900/80 to-slate-900 hover:bg-purple-800 text-purple-200 border border-purple-500/40 font-heading font-bold text-sm tracking-wider uppercase transition-all hover:scale-[1.02]"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-purple-900/80 to-slate-900 hover:bg-purple-800 text-purple-200 border border-purple-500/40 font-heading font-bold text-sm tracking-wider uppercase transition-all hover:scale-[1.02] cursor-pointer"
               >
                 <Crown className="w-4 h-4 text-purple-400" />
                 Boss Trials
               </button>
-              {onTriggerLevelUpPreview && (
-                <button
-                  onClick={onTriggerLevelUpPreview}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-heading font-bold text-xs uppercase tracking-wider transition-all hover:scale-[1.02]"
-                  title="Preview High-Impact Level Up Particle Animation"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
-                  Preview Level Up FX
-                </button>
-              )}
             </div>
           </div>
         </div>
       </ScrollReveal>
+
+      {/* Active Syllabus Highlights Banner */}
+      {activeSyllabus && (
+        <ScrollReveal threshold={0.05}>
+          <div className="rounded-xl border border-cyan-500/20 bg-slate-900/70 p-5 flex flex-col md:flex-row md:items-center justify-between gap-5 shadow-xl">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-300 font-monarch font-bold text-lg shrink-0">
+                {activeSyllabus.progressPercentage || 0}%
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono-tech text-cyan-400 uppercase tracking-wider">Active Curriculum:</span>
+                  <span className="text-sm font-heading font-bold text-white">{activeSyllabus.program} ({activeSyllabus.semester})</span>
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  {activeSyllabus.subjects.map(s => `${s.name} (${s.progressPercentage || 0}%)`).join(' · ')}
+                </div>
+              </div>
+            </div>
+
+            {weakTopics.length > 0 && (
+              <div className="flex items-center gap-2 text-xs font-mono-tech">
+                <span className="text-amber-400 font-bold flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" /> Weak Target:
+                </span>
+                <span className="text-slate-300">{weakTopics[0].topicName} ({weakTopics[0].progressPercentage}%)</span>
+                <button
+                  onClick={() => onNavigate('quizzes')}
+                  className="ml-2 px-2.5 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold text-[11px] cursor-pointer"
+                >
+                  Drill Now
+                </button>
+              </div>
+            )}
+          </div>
+        </ScrollReveal>
+      )}
 
       {/* Grid: Stats Overview & Quick Hunter Attributes */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -112,7 +172,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
               <div>
                 <span className="text-[11px] font-mono-tech text-cyan-400 uppercase tracking-widest font-semibold">HUNTER LICENSE</span>
-                <h3 className="font-heading font-bold text-xl text-slate-100">{user.hunterName}</h3>
+                <h3 className="font-heading font-bold text-xl text-slate-100">{normalizeHunterName(user.hunterName)}</h3>
                 <span className="text-xs text-slate-400">{user.hunterClass}</span>
               </div>
               <div className="text-right">

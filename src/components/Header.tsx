@@ -1,16 +1,24 @@
 import React from 'react';
 import { HunterUser } from '../types/hunter';
-import { Volume2, VolumeX, Flame, Zap, Coins } from 'lucide-react';
+import { Volume2, VolumeX, Flame, Zap, Coins, LogOut } from 'lucide-react';
 import { soundManager } from '../utils/audio';
+import { normalizeHunterName } from '../utils/hunterIdentity';
 
 interface HeaderProps {
   user: HunterUser;
   onOpenCharacterSheet: () => void;
   isMuted: boolean;
   onToggleMute: () => void;
+  onLogout?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ user, onOpenCharacterSheet, isMuted, onToggleMute }) => {
+export const Header: React.FC<HeaderProps> = ({ 
+  user, 
+  onOpenCharacterSheet, 
+  isMuted, 
+  onToggleMute,
+  onLogout 
+}) => {
   const xpPercent = Math.min(100, Math.round((user.xp / user.xpNext) * 100));
   const manaPercent = Math.min(100, Math.round((user.mana / user.maxMana) * 100));
 
@@ -40,7 +48,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenCharacterSheet, isMu
           <div>
             <div className="flex items-center gap-2">
               <span className="font-heading font-bold text-base sm:text-lg text-slate-100 group-hover:text-cyan-400 transition-colors">
-                {user.hunterName}
+                {normalizeHunterName(user.hunterName)}
               </span>
               <span className="text-xs px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-500/30 text-cyan-300 font-mono-tech font-semibold">
                 LV.{user.level}
@@ -87,13 +95,13 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenCharacterSheet, isMu
           </div>
         </div>
 
-        {/* Right: Currency, Streaks, Stat Alert, Sound Toggle */}
-        <div className="flex items-center gap-3 sm:gap-4">
+        {/* Right: Currency, Streaks, Stat Alert, Sound Toggle, Logout */}
+        <div className="flex items-center gap-2.5 sm:gap-4">
           {/* Unspent Stat Points Alert */}
           {user.statPoints > 0 && (
             <button
               onClick={onOpenCharacterSheet}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-semibold animate-pulse hover:bg-amber-500/25 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-semibold animate-pulse hover:bg-amber-500/25 transition-colors cursor-pointer"
             >
               <span className="w-2 h-2 rounded-full bg-amber-400" />
               <span>+{user.statPoints} PTS</span>
@@ -118,14 +126,30 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenCharacterSheet, isMu
               onToggleMute();
               soundManager.playSfx('click');
             }}
-            className="p-1.5 rounded-lg bg-slate-900/80 border border-slate-700/60 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/50 transition-colors"
+            className="p-1.5 rounded-lg bg-slate-900/80 border border-slate-700/60 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/50 transition-colors cursor-pointer"
             title={isMuted ? "Unmute Audio" : "Mute Audio"}
             aria-label="Toggle Sound"
           >
             {isMuted ? <VolumeX className="w-4 h-4 text-slate-500" /> : <Volume2 className="w-4 h-4 text-cyan-400" />}
           </button>
+
+          {/* Log Out Option */}
+          {onLogout && (
+            <button
+              onClick={() => {
+                soundManager.playSfx('click');
+                onLogout();
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/80 border border-slate-700/60 hover:border-rose-500/50 text-slate-400 hover:text-rose-300 text-xs font-mono-tech transition-colors cursor-pointer"
+              title="Log Out of StudyBuddy"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Log Out</span>
+            </button>
+          )}
         </div>
       </div>
     </header>
   );
 };
+

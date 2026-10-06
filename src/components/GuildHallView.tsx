@@ -9,6 +9,7 @@ import {
   Flame,
   Globe
 } from 'lucide-react';
+import { normalizeHunterName } from '../utils/hunterIdentity';
 
 interface GuildHallViewProps {
   user: HunterUser;
@@ -20,7 +21,7 @@ export const GuildHallView: React.FC<GuildHallViewProps> = ({ user }) => {
     { rank: 2, name: 'Cha Hae-In', title: 'Radiant Sword', rankLetter: 'S', level: 118, hours: 440, avatar: '⚔️' },
     { rank: 3, name: 'Choi Jong-In', title: 'The Ultimate Flame', rankLetter: 'S', level: 98, hours: 390, avatar: '🔥' },
     { rank: 4, name: 'Baek Yoonho', title: 'White Tiger Guildmaster', rankLetter: 'S', level: 92, hours: 360, avatar: '🐯' },
-    { rank: 12, name: `${user.hunterName} (You)`, title: user.currentTitle, rankLetter: user.hunterRank, level: user.level, hours: Math.round(user.totalStudyMinutes / 60), isUser: true, avatar: '⚡' }
+    { rank: 12, name: `${normalizeHunterName(user.hunterName)} (You)`, title: user.currentTitle, rankLetter: user.hunterRank, level: user.level, hours: Math.round(user.totalStudyMinutes / 60), isUser: true, avatar: '⚡' }
   ];
 
   const globalRaidHp = 342000;

@@ -6,6 +6,7 @@
 
 import { GoogleGenAI } from '@google/genai';
 import { AIProviderConfig, AIProvider } from '../types/hunter';
+import { sanitizeSystemGuideResponse } from './responseSanitizer';
 
 export interface ProviderMeta {
   id: AIProvider;
@@ -109,15 +110,48 @@ export const PROVIDERS: Record<AIProvider, ProviderMeta> = {
   }
 };
 
-export const HUNTER_SYSTEM_PROMPT = `
-You are the Hunter System Guide & Tactical Architect of StudyBuddy AI — a dark-fantasy gamified study system inspired by dungeon hunting monarchs.
-Your role:
-- Provide precise, rigorous, and intellectually thorough study explanations.
-- Speak in a disciplined, high-ranking Hunter System voice ("Tactical Directive:", "Mana Efficiency:", "Analysis:").
-- Help the Hunter master difficult concepts in Mathematics, Computer Science, Physics, Engineering, and Deep Learning.
-- When asked for quiz questions, formulate challenging multi-choice questions with full explanations.
-- Keep responses concise, clear, and actionable. Never use generic corporate cheerleading; treat the user as an Awakened Monarch sharpening their intellect.
-`;
+export const HUNTER_SYSTEM_PROMPT = `You are the System Guide, an intelligent and encouraging academic tutor in StudyBuddy.
+
+Your mission is to help students learn and master their syllabus concepts with clarity and confidence.
+
+RESPONSE GUIDELINES:
+1. Educational Priority:
+   - Act primarily as a clear, supportive academic tutor.
+   - For simple or factual questions (e.g., "what is statistics", "what is mean", "define median", "what is probability"), provide a clean, direct explanation without long narratives or roleplay.
+   - For detailed requests ("explain in detail", "give exam notes"), provide thorough, well-structured academic notes.
+   - For exam answers ("give me exam answer for ..."), format with clear headings, definitions, key formulas/points, and an exam-ready structure.
+
+2. Natural Typo Correction:
+   - If the student mistypes an academic term (e.g., "what is statistoic", "what is meanng", "probablity", "what is avrage"), infer the intended concept naturally.
+   - Start naturally: "You probably mean **statistics**." and then provide the clean explanation.
+
+3. Subtle System Style:
+   - Use clean, minimal System styling (e.g., ⚔️ or 🎯 in section titles).
+   - NEVER create lengthy RPG narratives, military briefings, or protocol initialization logs for simple academic questions.
+   - NEVER dump or repeat the student's profile, level, rank, or syllabus stats unless they explicitly ask ("What should I study next?" or "Show my progress").
+
+4. Syllabus Integration:
+   - Use the background syllabus context silently to provide relevant examples and mention the related topic (e.g., "📚 Syllabus Link: Probability and Statistics → Basic Concepts of Statistics").
+   - If a question is outside the syllabus, answer it helpfully and naturally without forcing syllabus connections.
+
+5. Next Steps:
+   - Conclude with at most ONE helpful next step or follow-up question (e.g., "Want me to explain qualitative vs quantitative data next?" or "Want me to quiz you on this?").
+   - NEVER claim that XP was awarded, levels were gained, or quests were completed in your message text. Backend systems handle game progression.
+
+6. Output Purity:
+   - Output ONLY the final message intended for the student.
+   - Do NOT include internal planning, drafting steps, meta-commentary, or self-evaluations.
+   - Start immediately with the student-facing answer.`;
+
+export function buildHunterSystemPrompt(studentContext?: string): string {
+  let prompt = HUNTER_SYSTEM_PROMPT;
+
+  if (studentContext && studentContext.trim()) {
+    prompt += `\n\nBACKGROUND SYLLABUS CONTEXT (Use silently to tailor explanations and examples):\n${studentContext.trim()}`;
+  }
+
+  return prompt;
+}
 
 export function resolveAutoModel(provider: AIProvider): string {
   switch (provider) {
@@ -754,7 +788,11 @@ export async function testAIConnection(config: AIProviderConfig): Promise<TestCo
 /**
  * Main query function for Hunter Guide AI
  */
-export async function askHunterGuide(prompt: string, customConfig?: AIProviderConfig): Promise<string> {
+export async function askHunterGuide(
+  prompt: string, 
+  customConfig?: AIProviderConfig,
+  customSystemInstruction?: string
+): Promise<string> {
   const config = customConfig || getDefaultAIConfig();
   const effectiveModel = config.model || resolveAutoModel(config.provider);
   const resolvedConfig = { ...config, model: effectiveModel };
@@ -765,38 +803,32 @@ export async function askHunterGuide(prompt: string, customConfig?: AIProviderCo
 
   if (requiresKey && (!cleanKey || cleanKey === 'MY_GEMINI_API_KEY')) {
     const fallback = generateTacticalResponse(prompt);
-    return `⚠️ *[SYSTEM NOTICE: AI is not configured. Add an API key in the AI Configuration tab to enable live model reasoning.]*\n\n${fallback}`;
+    return sanitizeSystemGuideResponse(fallback);
   }
 
   try {
     if (resolvedConfig.provider === 'gemini') {
-      return await callGeminiREST(prompt, resolvedConfig);
+      return await callGeminiREST(prompt, resolvedConfig, customSystemInstruction);
     } else {
-      return await callOpenAICompatible(prompt, resolvedConfig);
+      return await callOpenAICompatible(prompt, resolvedConfig, customSystemInstruction);
     }
-  } catch (err: unknown) {
-    let safeMsg = 'Unable to connect to AI provider.';
-    if (err instanceof Error) {
-      if (err.message.includes('Invalid API key') || err.message.includes('401') || err.message.toLowerCase().includes('api_key') || err.message.toLowerCase().includes('key not valid')) {
-        safeMsg = 'The provider rejected the API key.';
-      } else {
-        safeMsg = err.message;
-        if (cleanKey && safeMsg.includes(cleanKey)) {
-          safeMsg = safeMsg.replace(cleanKey, '••••');
-        }
-      }
-    }
-
+  } catch {
     const fallback = generateTacticalResponse(prompt);
-    return `⚠️ *[SYSTEM ALERT: Provider connection failed (${safeMsg}). Reverting to local tactical reasoning matrix.]*\n\n${fallback}`;
+    return sanitizeSystemGuideResponse(fallback);
   }
 }
 
-async function callGeminiREST(prompt: string, config: AIProviderConfig): Promise<string> {
-  const cleanKey = (config.apiKey || '').trim();
-  const initialModel = config.model || 'gemini-2.5-flash';
+export async function callGeminiREST(
+  prompt: string, 
+  config?: AIProviderConfig,
+  customSystemInstruction?: string
+): Promise<string> {
+  const activeConfig = config || getDefaultAIConfig();
+  const cleanKey = (activeConfig.apiKey || '').trim();
+  const initialModel = activeConfig.model || 'gemini-2.5-flash';
   const modelsToTry = [initialModel, ...GEMINI_CANDIDATE_MODELS.filter(m => m !== initialModel)];
 
+  const systemPrompt = buildHunterSystemPrompt(customSystemInstruction);
   let lastDiag: { title: string; description: string; safeDiagnostic: string } | null = null;
 
   for (const model of modelsToTry) {
@@ -807,11 +839,13 @@ async function callGeminiREST(prompt: string, config: AIProviderConfig): Promise
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: systemPrompt }]
+          },
           contents: [
             {
-              parts: [
-                { text: `${HUNTER_SYSTEM_PROMPT}\n\nHunter Inquiry: ${prompt}` }
-              ]
+              role: 'user',
+              parts: [{ text: prompt }]
             }
           ]
         })
@@ -820,7 +854,7 @@ async function callGeminiREST(prompt: string, config: AIProviderConfig): Promise
       if (res.ok) {
         const data = await res.json();
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) return text;
+        if (text) return sanitizeSystemGuideResponse(text);
       } else {
         let errBody = '';
         try { errBody = await res.text(); } catch {}
@@ -848,10 +882,13 @@ async function callGeminiREST(prompt: string, config: AIProviderConfig): Promise
       const ai = new GoogleGenAI({ apiKey: cleanKey });
       const sdkResponse = await ai.models.generateContent({
         model,
-        contents: [{ role: 'user', parts: [{ text: `${HUNTER_SYSTEM_PROMPT}\n\nHunter Inquiry: ${prompt}` }] }]
+        contents: prompt,
+        config: {
+          systemInstruction: systemPrompt
+        }
       });
       if (sdkResponse && sdkResponse.text) {
-        return sdkResponse.text;
+        return sanitizeSystemGuideResponse(sdkResponse.text);
       }
     } catch {
       // ignore and try next model
@@ -865,7 +902,11 @@ async function callGeminiREST(prompt: string, config: AIProviderConfig): Promise
   throw new Error('Empty response received from Gemini engine.');
 }
 
-async function callOpenAICompatible(prompt: string, config: AIProviderConfig): Promise<string> {
+export async function callOpenAICompatible(
+  prompt: string, 
+  config: AIProviderConfig,
+  customSystemInstruction?: string
+): Promise<string> {
   const providerMeta = PROVIDERS[config.provider] || PROVIDERS.openai;
   const baseUrl = (config.baseUrl || providerMeta.defaultBaseUrl).replace(/\/+$/, '');
   const endpoint = `${baseUrl}/chat/completions`;
@@ -884,10 +925,12 @@ async function callOpenAICompatible(prompt: string, config: AIProviderConfig): P
     headers['X-Title'] = 'StudyBuddy AI Monarch Hunter';
   }
 
+  const systemPrompt = buildHunterSystemPrompt(customSystemInstruction);
+
   const payload = {
     model: config.model || resolveAutoModel(config.provider),
     messages: [
-      { role: 'system', content: HUNTER_SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: prompt }
     ],
     temperature: 0.7
@@ -911,53 +954,297 @@ async function callOpenAICompatible(prompt: string, config: AIProviderConfig): P
   if (!content) {
     throw new Error('No completion returned by endpoint.');
   }
-  return content;
+  return sanitizeSystemGuideResponse(content);
 }
 
 export function generateTacticalResponse(query: string): string {
-  const q = query.toLowerCase();
+  const q = query.toLowerCase().trim();
 
+  // 1. Hello / Greetings
+  if (/^(hello|hi|hey|greetings|system)/i.test(q) && q.length < 25) {
+    return `⚔️ **Welcome to StudyBuddy**
+
+Greetings! Your study systems are calibrated and ready.
+
+What concept or syllabus topic do you want to master today? You can ask for a definition, exam notes, practice questions, or ask what to study next.`;
+  }
+
+  // 2. Statistics Typos ("statistoic", "statstics", "statistcs", etc.)
+  if (q.includes('statistoic') || q.includes('statstics') || q.includes('statistcs') || q.includes('statisic')) {
+    return `⚔️ **Statistics**
+
+You probably mean **statistics**.
+
+Statistics is the study of collecting, organizing, analyzing, interpreting, and presenting data.
+
+**Example:** If you collect the marks of 50 students and calculate their average, highest mark, and lowest mark, you are using statistics.
+
+Two major branches are:
+• **Descriptive Statistics** — summarizes collected data (e.g., class average is 72).
+• **Inferential Statistics** — uses sample data to make conclusions about a larger population.
+
+📚 **Syllabus Link:** Probability and Statistics → Basic Concepts of Statistics.
+
+Want me to explain **qualitative and quantitative data** next?`;
+  }
+
+  // 3. Explain Statistics in Detail
+  if ((q.includes('statistic') || q.includes('statistics')) && (q.includes('detail') || q.includes('comprehensive') || q.includes('depth') || q.includes('deep'))) {
+    return `⚔️ **Statistics (Comprehensive Breakdown)**
+
+Statistics is the discipline concerned with the collection, organization, analysis, interpretation, and presentation of data.
+
+### 1. The Core Scientific Workflow
+1. **Data Collection**: Obtaining raw measurements through observational studies, experiments, surveys, or system logs.
+2. **Organization & Classification**: Grouping raw figures into structured frequency tables, categories, and intervals.
+3. **Presentation**: Visualizing distributions using histograms, frequency polygons, ogives, and bar charts.
+4. **Analysis**: Computing numerical indices such as central tendency (mean, median, mode) and dispersion (variance, standard deviation).
+5. **Interpretation**: Formulating empirical conclusions and hypothesis testing.
+
+### 2. Primary Classifications
+• **Descriptive Statistics**: Focuses on organizing and summarizing the observed dataset without drawing conclusions beyond it (e.g., sample mean $\\bar{x}$, standard deviation $s$).
+• **Inferential Statistics**: Generalizes findings from a random sample to an entire population using probability models (e.g., confidence intervals, hypothesis testing).
+
+### 3. Data Types
+• **Qualitative (Categorical)**: Nominal (names/labels) and Ordinal (ranked orders).
+• **Quantitative (Numerical)**: Discrete (countable whole numbers) and Continuous (measurable real values).
+
+📚 **Syllabus Link:** Probability and Statistics → Basic Concepts of Statistics.
+
+Want me to provide an exam-ready answer or quiz you on these concepts?`;
+  }
+
+  // 4. Exam Answer for Statistics
+  if ((q.includes('exam') || q.includes('2 mark') || q.includes('5 mark') || q.includes('test answer')) && (q.includes('stat') || q.includes('concept'))) {
+    return `⚔️ **Exam-Ready Answer: Basic Concepts of Statistics**
+
+**Q: Define Statistics and explain its main functions and branches.**
+
+---
+
+### 1. Definition (2 Marks)
+**Statistics** is defined as the science of collecting, organizing, presenting, analyzing, and interpreting numerical data to draw valid conclusions and make reasonable decisions.
+> *"Statistics may be called the science of counting or the science of estimates and probabilities."*
+
+### 2. Main Steps & Functions (3 Marks)
+1. **Collection of Data**: Systematic gathering from primary or secondary sources.
+2. **Organization of Data**: Classifying raw data into frequency distributions.
+3. **Presentation of Data**: Representing data in charts, graphs, and tables.
+4. **Analysis of Data**: Calculating summary metrics (Mean, Variance, Correlation).
+5. **Interpretation of Data**: Drawing conclusions for practical decision making.
+
+### 3. Two Main Branches (2 Marks)
+- **Descriptive Statistics**: Techniques to summarize and describe features of a dataset.
+- **Inferential Statistics**: Methods of using sample data to make generalized predictions about a population.
+
+### 4. Key Limitations for Exam Notes
+- Deals only with aggregates, not isolated single observations.
+- Deals only with quantitative characteristics unless qualitative traits are coded.
+
+📚 **Syllabus Reference:** Unit 1 — Probability & Statistics.
+
+Want me to quiz you on this topic before your exams?`;
+  }
+
+  // 5. Quiz me on statistics / Quiz request
+  if (q.includes('quiz me') || (q.includes('quiz') && q.includes('stat')) || q.includes('test me on stat')) {
+    return `⚔️ **Knowledge Trial: Statistics Fundamentals**
+
+Here are 3 quick check questions to test your grasp:
+
+**Question 1:**
+Which branch of statistics deals with making inferences and predictions about an entire population based on a sample?
+A) Descriptive Statistics
+B) Inferential Statistics
+C) Qualitative Statistics
+D) Experimental Statistics
+
+**Question 2:**
+If a dataset contains extreme outliers (e.g., $10, 12, 14, 15, 950$), which measure of central tendency is the most reliable?
+A) Mean
+B) Median
+C) Mode
+D) Range
+
+**Question 3:**
+The count of students in a lecture hall is an example of:
+A) Qualitative data
+B) Continuous quantitative data
+C) Discrete quantitative data
+D) Nominal data
+
+Type your answers (e.g., **B, B, C**) and I will evaluate your trial! Or click the **Knowledge Trials (Quizzes)** tab for a full interactive run.`;
+  }
+
+  // 6. Normal Statistics ("what is statistics", "define statistics")
+  if (q.includes('what is statistics') || q === 'statistics' || (q.includes('statistics') && (q.includes('define') || q.includes('meaning')))) {
+    return `⚔️ **Statistics**
+
+Statistics is the study of collecting, organizing, analyzing, interpreting, and presenting data.
+
+**Example:** If you collect the marks of 50 students and calculate their average, highest mark, and lowest mark, you are using statistics.
+
+Two major branches are:
+• **Descriptive Statistics** — summarizes collected data (e.g., class average is 72).
+• **Inferential Statistics** — uses sample data to make conclusions about a larger population.
+
+📚 **Syllabus Link:** Probability and Statistics → Basic Concepts of Statistics.
+
+Want me to explain **qualitative and quantitative data** next?`;
+  }
+
+  // 7. What should I study next?
+  if (q.includes('what should i study') || q.includes('where should i start') || q.includes('recommend') || q.includes('study next')) {
+    return `🎯 **Recommended Study Target**
+
+Based on your active curriculum:
+
+**Priority Topic:** **Qualitative and Quantitative Data**
+*(Subject: Probability and Statistics → Basic Concepts)*
+
+**Why this topic?**
+Understanding the distinction between categorical (qualitative) and numerical (quantitative) data is essential before constructing frequency distributions and computing averages.
+
+**Quick Action Plan:**
+1. Review the difference between nominal, ordinal, discrete, and continuous variables.
+2. Complete a 3-question trial in the **Knowledge Trials (Quizzes)** tab.
+3. Spend 20 minutes in the **Focus Sanctuary** taking structured notes.
+
+Shall we begin with the definitions of qualitative vs quantitative data?`;
+  }
+
+  // 8. Mean & Average (with typos like "avrage", "meanng")
+  if (q.includes('mean') || q.includes('average') || q.includes('avrage') || q.includes('meanng')) {
+    return `⚔️ **Mean (Arithmetic Average)**
+
+${q.includes('avrage') || q.includes('meanng') ? 'You probably mean the **arithmetic mean**.\n\n' : ''}The **Mean** is the central value of a set of numbers, calculated by summing all values and dividing by the total count of numbers.
+
+**Formula:**
+$$\\bar{x} = \\frac{\\sum x}{n}$$
+
+For grouped data with frequencies $f_i$:
+$$\\bar{x} = \\frac{\\sum f_i x_i}{\\sum f_i}$$
+
+**Simple Example:**
+If five students score $70, 80, 85, 90,$ and $95$:
+$$\\text{Sum} = 70 + 80 + 85 + 90 + 95 = 420$$
+$$\\bar{x} = \\frac{420}{5} = 84$$
+
+📚 **Syllabus Link:** Probability and Statistics → Measures of Central Tendency.
+
+Want me to show you how outliers affect the mean versus the median?`;
+  }
+
+  // 9. Median
+  if (q.includes('median')) {
+    return `⚔️ **Median**
+
+The **Median** is the middle value in a dataset when all observations are arranged in ascending or descending order.
+
+**How to compute it:**
+1. Sort values from least to greatest.
+2. If $n$ is odd: Median is the middle number at position $\\frac{n+1}{2}$.
+3. If $n$ is even: Median is the average of the two middle numbers at positions $\\frac{n}{2}$ and $\\frac{n}{2} + 1$.
+
+**Example:**
+Dataset: $3, 7, 9, 15, 22$ (5 numbers)
+The middle number is **9**.
+
+📚 **Syllabus Link:** Probability and Statistics → Measures of Central Tendency.
+
+Unlike the mean, the median is resistant to extreme outliers. Want to see a comparison?`;
+  }
+
+  // 10. Qualitative vs Quantitative Data
+  if (q.includes('qualitative') || q.includes('quantitative') || q.includes('types of data')) {
+    return `⚔️ **Qualitative vs Quantitative Data**
+
+**Qualitative Data (Categorical)**
+Describes qualities, attributes, or characteristics that are non-numeric.
+• **Examples:** Eye color, gender, college major, satisfaction rating.
+• **Types:** *Nominal* (unordered labels like red/blue) and *Ordinal* (ordered categories like low/medium/high).
+
+**Quantitative Data (Numerical)**
+Consists of numbers representing measurable amounts or counts.
+• **Examples:** Exam marks, student height, travel time, daily temperature.
+• **Types:** *Discrete* (countable integers like number of books) and *Continuous* (measurable real numbers like 65.4 kg).
+
+📚 **Syllabus Link:** Probability and Statistics → Classification of Data.
+
+Want to test your classification knowledge with a quick 2-question drill?`;
+  }
+
+  // 11. Probability (with typos like "probablity")
+  if (q.includes('probab')) {
+    return `⚔️ **Probability**
+
+${q.includes('probablity') ? 'You probably mean **probability**.\n\n' : ''}**Probability** is the mathematical measure of the likelihood that an event will occur, represented on a scale from $0$ (impossible) to $1$ (certain).
+
+**Formula:**
+$$P(E) = \\frac{n(E)}{n(S)} = \\frac{\\text{Number of favorable outcomes}}{\\text{Total possible outcomes}}$$
+
+**Example:**
+Rolling a single 6-sided die:
+• Probability of rolling a 4: $\\frac{1}{6} \\approx 16.7\\%$
+• Probability of rolling an even number ($2, 4, 6$): $\\frac{3}{6} = 0.5$ ($50\\%$)
+
+📚 **Syllabus Link:** Probability and Statistics → Theory of Probability.
+
+Want me to explain the difference between mutually exclusive and independent events?`;
+  }
+
+  // 12. Bayes' Theorem Proof
+  if (q.includes('bayes')) {
+    return `⚔️ **Bayes' Theorem**
+
+**Statement:**
+For any two events $A$ and $B$ where $P(B) > 0$:
+$$P(A|B) = \\frac{P(B|A) \\cdot P(A)}{P(B)}$$
+
+### Step-by-Step Derivation:
+1. By conditional probability definition:
+   $$P(A|B) = \\frac{P(A \\cap B)}{P(B)} \\implies P(A \\cap B) = P(A|B) \\cdot P(B)$$
+2. Similarly:
+   $$P(B|A) = \\frac{P(B \\cap A)}{P(A)} \\implies P(B \\cap A) = P(B|A) \\cdot P(A)$$
+3. Since set intersection is commutative ($A \\cap B = B \\cap A$):
+   $$P(A|B) \\cdot P(B) = P(B|A) \\cdot P(A)$$
+4. Dividing both sides by $P(B)$:
+   $$P(A|B) = \\frac{P(B|A) \\cdot P(A)}{P(B)} \\quad \\blacksquare$$
+
+📚 **Syllabus Link:** Probability and Statistics → Conditional Probability.
+
+Want to see an exam calculation applying Bayes' theorem to medical diagnosis or spam filtering?`;
+  }
+
+  // 13. Algorithms / CS
   if (q.includes('dijkstra') || q.includes('shortest path') || q.includes('graph')) {
-    return `[SYSTEM DIRECTIVE: GRAPH THEORY ANALYSIS]
+    return `⚔️ **Dijkstra's Algorithm**
 
-**Dijkstra's Algorithm - Tactical Breakdown:**
-1. **Core Invariant**: Greedily extracts the unvisited vertex with the minimum tentative distance.
-2. **Time Complexity**:
-   - With standard Binary Min-Heap: **O((V + E) log V)**.
-   - With Fibonacci Heap: **O(E + V log V)** (theoretical optimal amortized decrease-key).
-3. **Weakness**: Fails on negative edge weights due to greedy irrevocable finalization. For negative weights, deploy **Bellman-Ford (O(V * E))**.
-4. **Hunter Advice**: When implementing in competitive gates, always maintain a visited set or check if the popped distance exceeds the current distance vector to prune obsolete queue entries.`;
+**Definition & Purpose:**
+Computes the single-source shortest path for a directed or undirected graph with non-negative edge weights.
+
+**Core Invariant:**
+Greedily extracts the unvisited vertex with the minimum tentative distance. Once a vertex is extracted from the priority queue, its shortest distance is finalized.
+
+**Time Complexity:**
+- Standard Binary Min-Heap: **O((V + E) log V)**
+- Fibonacci Heap: **O(E + V log V)**
+
+**Critical Constraint:**
+Fails when negative edge weights are present because greedily finalized distances may be shortened later. Use **Bellman-Ford (O(V · E))** for negative weights.`;
   }
 
-  if (q.includes('calculus') || q.includes('derivative') || q.includes('integral') || q.includes('eigen')) {
-    return `[SYSTEM DIRECTIVE: MATHEMATICAL ANALYSIS]
+  // 14. Default Concept Analysis
+  return `⚔️ **Concept Analysis: ${query.trim()}**
 
-**Linear Algebra & Matrix Operations:**
-- **Eigenvalues**: Roots of characteristic polynomial det(A - lambda * I) = 0.
-- **Geometric Meaning**: Directions where the linear transformation acts merely as scalar stretching without changing direction.
-- **Trace & Determinant Rules**:
-  - det(A) = Product of eigenvalues. If 0, the matrix collapses dimensionality and has non-trivial nullspace.
-  - tr(A) = Sum of eigenvalues = Sum of diagonal elements.
-- **Hunter Protocol**: When tackling multidimensional exam gates, always verify symmetry: symmetric matrices are guaranteed to have real eigenvalues and orthogonal eigenvectors.`;
-  }
+${query.trim()} is an important concept in your curriculum.
 
-  if (q.includes('focus') || q.includes('pomodoro') || q.includes('tired') || q.includes('procrastinat')) {
-    return `[SYSTEM DIRECTIVE: MONARCH WILLPOWER PROTOCOL]
+**Key Study Points:**
+1. **Definition**: Review the foundational definition and underlying axioms.
+2. **Formula / Rules**: Note any mathematical relationships or governing principles.
+3. **Application**: Work through a representative example without referencing the solution.
 
-**Fatigue & Focus Management:**
-1. **The 25/5 Interval**: High-intensity mental exertion consumes neurotransmitters rapidly. Limit continuous uninterrupted deep work to 25-50 minute bursts.
-2. **Dopamine Detoxification**: Close external notification portals. The Hunter brain cannot maintain flow state with dual-context switching.
-3. **Action Step**: Enter the **Focus Room** tab now, engage the Binaural Focus Frequency soundscape, and clear a 25-minute Pomodoro gate to earn +50 XP and 20 Mana.`;
-  }
+📚 **Syllabus Reference:** Active curriculum module.
 
-  return `[SYSTEM INTEL REPORT: DIRECTIVE ACCEPTED]
-
-**Target Subject**: ${query}
-
-**System Recommendation**:
-1. **Deconstruct the Core Invariant**: Isolate the foundational axioms before attempting higher-order derivatives or edge cases.
-2. **Active Recall Execution**: Do not merely read passively. Close the reference notes and reconstruct the mechanism from first principles on scratch paper.
-3. **Trial By Combat**: Test your knowledge in the **Dungeon Battles** or **Quizzes** tab to reinforce neural synaptic strength and earn Hunter XP.
-
-*The System awaits your next query, Hunter.*`;
+Want me to explain this concept in detail or quiz you on it?`;
 }

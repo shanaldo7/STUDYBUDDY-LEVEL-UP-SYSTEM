@@ -1,31 +1,89 @@
 import { HunterUser, DailyQuest, DungeonGate, Boss, QuizQuestion, ShadowSoldier, SkillNode, Flashcard, ExamMilestone } from '../types/hunter';
 
-export const initialUser: HunterUser = {
-  id: 'usr_monarch_01',
-  username: 'sung_jin_study',
-  hunterName: 'Sung Jin-Study',
-  hunterClass: 'Shadow Sovereign',
-  hunterRank: 'B',
-  level: 24,
-  xp: 3850,
-  xpNext: 5000,
-  mana: 180,
-  maxMana: 200,
-  statPoints: 6,
-  stats: {
-    strength: 45,     // Grit & Work Ethic
-    agility: 38,      // Speed & Fast Calculation
-    intelligence: 72, // Concept Mastery & Deep Theory
-    vitality: 40,     // Study Endurance
-    sense: 50         // Intuition & Analysis
-  },
-  currentTitle: 'Monarch of Knowledge',
-  streakDays: 7,
-  lastActiveDate: new Date().toISOString(),
-  gold: 1450,
-  totalStudyMinutes: 1840,
-  gatesCleared: 34
-};
+export function createFreshHunterUser(email?: string, name?: string): HunterUser {
+  const cleanEmail = email || 'hunter.novice@gmail.com';
+  return {
+    id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    username: cleanEmail.split('@')[0],
+    hunterName: name || 'Awakened Hunter',
+    hunterClass: 'Shadow Monarch (Novice)',
+    hunterRank: 'E',
+    level: 1,
+    xp: 0,
+    xpNext: 1000,
+    mana: 100,
+    maxMana: 100,
+    statPoints: 0,
+    stats: {
+      strength: 10,     // Grit & Work Ethic
+      agility: 10,      // Speed & Fast Calculation
+      intelligence: 10, // Concept Mastery & Deep Theory
+      vitality: 10,     // Study Endurance
+      sense: 10         // Intuition & Analysis
+    },
+    currentTitle: 'Awakened Novice',
+    streakDays: 1,
+    lastActiveDate: new Date().toISOString(),
+    gold: 0,
+    totalStudyMinutes: 0,
+    gatesCleared: 0
+  };
+}
+
+export function createFreshDailyQuests(): DailyQuest[] {
+  return [
+    {
+      id: 'quest_1',
+      title: 'Cognitive Conditioning',
+      description: 'Complete 50 minutes of deep focus study sessions.',
+      current: 0,
+      target: 50,
+      rewardXp: 350,
+      rewardPoints: 2,
+      completed: false,
+      claimed: false,
+      icon: 'Brain'
+    },
+    {
+      id: 'quest_2',
+      title: 'Dungeon Gate Breach',
+      description: 'Conquer 2 Dungeon Gate study expeditions.',
+      current: 0,
+      target: 2,
+      rewardXp: 400,
+      rewardPoints: 2,
+      completed: false,
+      claimed: false,
+      icon: 'Swords'
+    },
+    {
+      id: 'quest_3',
+      title: 'Active Recall Drill',
+      description: 'Review at least 10 flashcards in the Revision Lab.',
+      current: 0,
+      target: 10,
+      rewardXp: 300,
+      rewardPoints: 1,
+      completed: false,
+      claimed: false,
+      icon: 'Repeat'
+    },
+    {
+      id: 'quest_4',
+      title: 'Monarch Boss Challenge',
+      description: 'Inflict at least 2,000 damage on a Raid Boss Trial.',
+      current: 0,
+      target: 2000,
+      rewardXp: 600,
+      rewardPoints: 3,
+      completed: false,
+      claimed: false,
+      icon: 'Crown'
+    }
+  ];
+}
+
+export const initialUser: HunterUser = createFreshHunterUser();
 
 export const initialDailyQuests: DailyQuest[] = [
   {
@@ -91,7 +149,8 @@ export const initialGates: DungeonGate[] = [
     monsterType: 'Beast',
     rewardXp: 300,
     rewardGold: 120,
-    color: 'from-slate-800 to-emerald-950'
+    color: 'from-slate-800 to-emerald-950',
+    requiredLevel: 1
   },
   {
     id: 'gate_d',
@@ -105,7 +164,8 @@ export const initialGates: DungeonGate[] = [
     monsterType: 'Undead',
     rewardXp: 550,
     rewardGold: 240,
-    color: 'from-slate-800 to-cyan-950'
+    color: 'from-slate-800 to-cyan-950',
+    requiredLevel: 5
   },
   {
     id: 'gate_c',
@@ -119,7 +179,8 @@ export const initialGates: DungeonGate[] = [
     monsterType: 'Construct',
     rewardXp: 850,
     rewardGold: 400,
-    color: 'from-slate-800 to-blue-950'
+    color: 'from-slate-800 to-blue-950',
+    requiredLevel: 12
   },
   {
     id: 'gate_b',
@@ -133,7 +194,8 @@ export const initialGates: DungeonGate[] = [
     monsterType: 'Arcane',
     rewardXp: 1300,
     rewardGold: 650,
-    color: 'from-slate-800 to-indigo-950'
+    color: 'from-slate-800 to-indigo-950',
+    requiredLevel: 22
   },
   {
     id: 'gate_a',
@@ -147,7 +209,8 @@ export const initialGates: DungeonGate[] = [
     monsterType: 'Monarch Beast',
     rewardXp: 2100,
     rewardGold: 1100,
-    color: 'from-slate-800 to-purple-950'
+    color: 'from-slate-800 to-purple-950',
+    requiredLevel: 32
   },
   {
     id: 'gate_s',
@@ -161,21 +224,65 @@ export const initialGates: DungeonGate[] = [
     monsterType: 'Monarch Commander',
     rewardXp: 3800,
     rewardGold: 2200,
-    color: 'from-slate-800 to-red-950'
+    color: 'from-slate-800 to-red-950',
+    requiredLevel: 45
   }
 ];
 
 export const initialBosses: Boss[] = [
   {
+    id: 'boss_goblin_king',
+    name: 'Hobgoblin Warlord Archivist',
+    title: 'Warlord of Syntax & Logic',
+    rank: 'E',
+    hp: 2500,
+    maxHp: 2500,
+    specialty: 'Variables, Boolean Logic & Algorithmic Foundations',
+    lore: 'Commands syntax swarms at the entrance of the dimensional gate. A formidable trial for new hunters.',
+    phases: 1,
+    requiredLevel: 1,
+    xpBonus: 400,
+    element: 'Earth',
+    extractableShadow: {
+      name: 'Iron Hobgoblin Vanguard',
+      grade: 'Normal',
+      type: 'Infantry Vanguard',
+      power: 250
+    }
+  },
+  {
+    id: 'boss_frost_golem',
+    name: 'Glacial Golem Sentinel',
+    title: 'Guardian of the Frozen Derivations',
+    rank: 'D',
+    hp: 4000,
+    maxHp: 4000,
+    specialty: 'Limits, Derivatives & Linear Matrices',
+    lore: 'Chilled armor composed of crystalline calculus proofs. Requires rapid mental differentiation.',
+    phases: 2,
+    requiredLevel: 5,
+    xpBonus: 750,
+    element: 'Ice',
+    extractableShadow: {
+      name: 'Tank the Frost Sentinel',
+      grade: 'Elite',
+      type: 'Frost Construct',
+      power: 450
+    }
+  },
+  {
     id: 'boss_igris',
     name: 'Igris the Bloodred Knight',
     title: 'Commander of the Red Throne',
-    rank: 'S',
+    rank: 'C',
     hp: 6000,
     maxHp: 6000,
     specialty: 'High-Speed Algorithms & Time Complexity',
     lore: 'An ancient knight clad in crimson armor who guarded the empty monarch throne for centuries. Requires flawless algorithmic reasoning to defeat.',
     phases: 2,
+    requiredLevel: 15,
+    xpBonus: 1200,
+    element: 'Blood Fire',
     extractableShadow: {
       name: 'Igris the Bloodred Knight',
       grade: 'Marshal',
@@ -184,37 +291,43 @@ export const initialBosses: Boss[] = [
     }
   },
   {
-    id: 'boss_architect',
-    name: 'Architect of the System',
-    title: 'Keeper of the Double Dungeon',
-    rank: 'S+',
-    hp: 9500,
-    maxHp: 9500,
-    specialty: 'Discrete Mathematics, Proofs & Set Theory',
-    lore: 'The creator of the Hunter awakening protocol. Strikes with merciless geometric statues and logical paradoxes.',
-    phases: 3,
-    extractableShadow: {
-      name: 'Grand Architect Simulacrum',
-      grade: 'Grand Marshal',
-      type: 'Arcane Construct',
-      power: 1200
-    }
-  },
-  {
     id: 'boss_silad',
     name: 'Frost Monarch Silad',
     title: 'Sovereign of the Absolute Zero',
-    rank: 'S',
+    rank: 'B',
     hp: 8200,
     maxHp: 8200,
     specialty: 'Thermodynamics & Classical Field Physics',
     lore: 'Commands blizzard tempests that freeze mental processing. Defeating him requires understanding entropy, heat transfer, and wave mechanics.',
     phases: 2,
+    requiredLevel: 25,
+    xpBonus: 1800,
+    element: 'Glacial Storm',
     extractableShadow: {
-      name: 'Glacial Ice Golem',
+      name: 'Glacial Ice Sovereign Beast',
       grade: 'Elite Knight',
       type: 'Elemental Beast',
-      power: 850
+      power: 950
+    }
+  },
+  {
+    id: 'boss_architect',
+    name: 'Architect of the System',
+    title: 'Keeper of the Double Dungeon',
+    rank: 'A',
+    hp: 9500,
+    maxHp: 9500,
+    specialty: 'Discrete Mathematics, Proofs & Set Theory',
+    lore: 'The creator of the Hunter awakening protocol. Strikes with merciless geometric statues and logical paradoxes.',
+    phases: 3,
+    requiredLevel: 35,
+    xpBonus: 2800,
+    element: 'Arcane Void',
+    extractableShadow: {
+      name: 'Grand Architect Simulacrum',
+      grade: 'Grand Marshal',
+      type: 'Arcane Construct',
+      power: 1400
     }
   },
   {
@@ -227,11 +340,14 @@ export const initialBosses: Boss[] = [
     specialty: 'Distributed Scalability, Concurrency & High Availability',
     lore: 'The legendary dragon whose roar devastated entire hunter guilds. Demands mastery over Paxos, Raft consensus, CAP theorem, and partition tolerance.',
     phases: 3,
+    requiredLevel: 45,
+    xpBonus: 4500,
+    element: 'Dragon Flame',
     extractableShadow: {
       name: 'Kamish Shadow Dragon Wyrm',
       grade: 'Grand Marshal',
       type: 'Dragon Wyrm',
-      power: 1800
+      power: 2000
     }
   }
 ];
@@ -355,6 +471,7 @@ export const initialSkills: SkillNode[] = [
     unlocked: true,
     level: 2,
     maxLevel: 3,
+    requiredLevel: 5,
     icon: 'Ghost'
   },
   {
@@ -366,6 +483,7 @@ export const initialSkills: SkillNode[] = [
     unlocked: false,
     level: 0,
     maxLevel: 3,
+    requiredLevel: 10,
     icon: 'Crown',
     dependsOn: 'sk_arise'
   },
@@ -379,6 +497,7 @@ export const initialSkills: SkillNode[] = [
     unlocked: true,
     level: 1,
     maxLevel: 3,
+    requiredLevel: 1,
     icon: 'Sparkles'
   },
   {
@@ -390,6 +509,7 @@ export const initialSkills: SkillNode[] = [
     unlocked: true,
     level: 1,
     maxLevel: 3,
+    requiredLevel: 3,
     icon: 'Eye',
     dependsOn: 'sk_deep_flow'
   },
@@ -403,6 +523,7 @@ export const initialSkills: SkillNode[] = [
     unlocked: true,
     level: 1,
     maxLevel: 2,
+    requiredLevel: 1,
     icon: 'Shield'
   },
   {
@@ -414,6 +535,7 @@ export const initialSkills: SkillNode[] = [
     unlocked: false,
     level: 0,
     maxLevel: 3,
+    requiredLevel: 6,
     icon: 'Zap',
     dependsOn: 'sk_mana_shield'
   }

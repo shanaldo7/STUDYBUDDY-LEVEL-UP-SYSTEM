@@ -149,15 +149,19 @@ export const BossBattleView: React.FC<BossBattleViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {bosses.map((boss, bIdx) => {
               const isSelected = selectedBoss.id === boss.id;
+              const isLocked = user.level < boss.requiredLevel;
               return (
                 <ScrollReveal key={boss.id} staggerIndex={bIdx} threshold={0.1}>
                   <div
-                    onClick={() => setSelectedBoss(boss)}
+                    onClick={() => {
+                      if (!isLocked) setSelectedBoss(boss);
+                    }}
                     className={`
-                      glass-panel rounded-xl p-6 border transition-all duration-500 cursor-pointer relative overflow-hidden group h-full flex flex-col justify-between
-                      ${isSelected 
+                      glass-panel rounded-xl p-6 border transition-all duration-500 relative overflow-hidden group h-full flex flex-col justify-between
+                      ${isLocked ? 'opacity-65 bg-slate-950/80 cursor-not-allowed border-slate-800' : 'cursor-pointer'}
+                      ${isSelected && !isLocked
                         ? 'border-purple-500 shadow-[0_0_40px_-5px_rgba(168,85,247,0.45)] bg-gradient-to-b from-[#160c28] to-[#0c0717]' 
-                        : 'border-slate-800 hover:border-purple-500/50 bg-slate-900/60'}
+                        : !isLocked ? 'border-slate-800 hover:border-purple-500/50 bg-slate-900/60' : ''}
                     `}
                   >
                     {/* Pulsing Aura Flare & Energy Particles for Boss Card */}
@@ -170,9 +174,16 @@ export const BossBattleView: React.FC<BossBattleViewProps> = ({
                     
                     <div>
                       <div className="flex items-center justify-between mb-3">
-                        <span className="px-2.5 py-1 rounded border border-amber-400/50 bg-amber-950/40 text-amber-300 text-xs font-monarch font-bold shadow-[0_0_10px_rgba(251,191,36,0.3)]">
-                          RANK {boss.rank} BOSS
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 rounded border border-amber-400/50 bg-amber-950/40 text-amber-300 text-xs font-monarch font-bold shadow-[0_0_10px_rgba(251,191,36,0.3)]">
+                            RANK {boss.rank} BOSS
+                          </span>
+                          {isLocked && (
+                            <span className="px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500/50 text-rose-300 text-[10px] font-mono-tech font-bold">
+                              🔒 LV.{boss.requiredLevel} REQUIRED
+                            </span>
+                          )}
+                        </div>
                         <span className="text-xs font-mono-tech text-purple-300 font-bold">
                           HP: {boss.hp.toLocaleString()}
                         </span>
@@ -180,7 +191,7 @@ export const BossBattleView: React.FC<BossBattleViewProps> = ({
 
                       <h3 className="font-heading font-black text-2xl text-slate-100 group-hover:text-purple-300 transition-colors flex items-center gap-2">
                         <span>{boss.name}</span>
-                        {isSelected && <Flame className="w-5 h-5 text-rose-500 animate-pulse" />}
+                        {isSelected && !isLocked && <Flame className="w-5 h-5 text-rose-500 animate-pulse" />}
                       </h3>
                       <div className="text-xs text-purple-400 font-mono-tech mt-0.5">{boss.title}</div>
                       <div className="text-xs text-cyan-400 font-mono-tech mt-1">Domain: {boss.specialty}</div>
@@ -210,14 +221,20 @@ export const BossBattleView: React.FC<BossBattleViewProps> = ({
                       </span>
 
                       <button
+                        disabled={isLocked}
                         onClick={(e) => {
                           e.stopPropagation();
-                          startBossRaid(boss);
+                          if (!isLocked) startBossRaid(boss);
                         }}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-purple-700 via-indigo-600 to-cyan-600 hover:from-purple-600 hover:to-cyan-500 text-white font-heading font-bold text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(168,85,247,0.5)] transition-all hover:scale-105 active:scale-95"
+                        className={`
+                          flex items-center gap-2 px-5 py-2.5 rounded-lg font-heading font-bold text-xs uppercase tracking-wider transition-all
+                          ${isLocked 
+                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
+                            : 'bg-gradient-to-r from-purple-700 via-indigo-600 to-cyan-600 hover:from-purple-600 hover:to-cyan-500 text-white shadow-[0_0_25px_rgba(168,85,247,0.5)] hover:scale-105 active:scale-95 cursor-pointer'}
+                        `}
                       >
                         <Crown className="w-4 h-4" />
-                        Initiate Raid
+                        {isLocked ? `Locked (Lv.${boss.requiredLevel})` : 'Initiate Raid'}
                       </button>
                     </div>
                   </div>

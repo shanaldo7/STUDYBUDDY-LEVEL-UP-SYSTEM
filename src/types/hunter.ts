@@ -2,7 +2,65 @@
  * StudyBuddy AI - Monarch Hunter Study System Types
  */
 
-export type HunterRank = 'E' | 'D' | 'C' | 'B' | 'A' | 'S';
+export type HunterRank = 'F' | 'E' | 'D' | 'C' | 'B' | 'A' | 'S';
+
+export type TopicStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'MASTERED';
+
+export interface TopicProgress {
+  topicId: string;
+  progressPercentage: number; // 0 to 100
+  status: TopicStatus;
+  quizzesTaken: number;
+  quizzesPassed: number;
+  dungeonsCleared: number;
+  studyMinutes: number;
+  questsCompleted: number;
+  lastPracticed?: string;
+}
+
+export interface SyllabusTopic {
+  id: string;
+  name: string;
+  unitId: string;
+  subjectId: string;
+  orderIndex?: number;
+  progress?: TopicProgress;
+}
+
+export interface SyllabusUnit {
+  id: string;
+  name: string;
+  subjectId: string;
+  orderIndex?: number;
+  topics: SyllabusTopic[];
+  progressPercentage?: number;
+}
+
+export interface SyllabusSubject {
+  id: string;
+  syllabusId: string;
+  name: string;
+  code?: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  orderIndex?: number;
+  units: SyllabusUnit[];
+  progressPercentage?: number;
+}
+
+export interface Syllabus {
+  id: string;
+  userId: string;
+  program: string; // e.g. "BCA", "B.Tech CSE", "Class 12 Science", "Medical"
+  semester: string; // e.g. "Semester 3", "Year 1", "Term 2"
+  institution?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  subjects: SyllabusSubject[];
+  progressPercentage?: number;
+}
 
 export interface HunterUser {
   id: string;
@@ -29,6 +87,8 @@ export interface HunterUser {
   gold: number;
   totalStudyMinutes: number;
   gatesCleared: number;
+  email?: string;
+  avatarUrl?: string;
 }
 
 export interface DailyQuest {
@@ -42,6 +102,8 @@ export interface DailyQuest {
   completed: boolean;
   claimed: boolean;
   icon: string;
+  subject?: string;
+  completionId?: string;
 }
 
 export interface DungeonGate {
@@ -57,18 +119,22 @@ export interface DungeonGate {
   rewardXp: number;
   rewardGold: number;
   color: string;
+  requiredLevel: number;
 }
 
 export interface Boss {
   id: string;
   name: string;
   title: string;
-  rank: 'S' | 'S+';
+  rank: 'E' | 'D' | 'C' | 'B' | 'A' | 'S' | 'S+';
   hp: number;
   maxHp: number;
   specialty: string;
   lore: string;
   phases: number;
+  requiredLevel: number;
+  xpBonus: number;
+  element?: string;
   extractableShadow: {
     name: string;
     grade: string;
@@ -84,7 +150,7 @@ export interface QuizQuestion {
   options: string[];
   correctIndex: number;
   explanation: string;
-  difficulty: 'E' | 'D' | 'C' | 'B' | 'A' | 'S';
+  difficulty: 'F' | 'E' | 'D' | 'C' | 'B' | 'A' | 'S';
 }
 
 export interface ShadowSoldier {
@@ -108,7 +174,22 @@ export interface SkillNode {
   level: number;
   maxLevel: number;
   icon: string;
+  requiredLevel: number;
   dependsOn?: string;
+}
+
+export interface Achievement {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  category: 'Quest' | 'Combat' | 'Mastery' | 'Endurance';
+  xpReward: number;
+  unlocked: boolean;
+  unlockedAt?: string;
+  icon: string;
+  progress: number;
+  maxProgress: number;
 }
 
 export interface Flashcard {
@@ -147,4 +228,3 @@ export interface AIProviderConfig {
   model: string;
   baseUrl?: string;
 }
-

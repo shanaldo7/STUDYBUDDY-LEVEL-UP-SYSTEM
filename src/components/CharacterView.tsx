@@ -11,20 +11,25 @@ import {
   Sparkles,
   Swords,
   Layers,
-  Heart
+  Heart,
+  AlertTriangle,
+  Trash2
 } from 'lucide-react';
 import { soundManager } from '../utils/audio';
+import { normalizeHunterName } from '../utils/hunterIdentity';
 
 interface CharacterViewProps {
   user: HunterUser;
   onAllocateStat: (statName: keyof HunterUser['stats']) => void;
   onSetTitle: (title: string) => void;
+  onOpenResetModal?: () => void;
 }
 
 export const CharacterView: React.FC<CharacterViewProps> = ({
   user,
   onAllocateStat,
-  onSetTitle
+  onSetTitle,
+  onOpenResetModal
 }) => {
   const titles = [
     { title: 'Monarch of Knowledge', bonus: '+15% Concept Mastery & Intelligence' },
@@ -78,7 +83,7 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
                   {user.hunterRank}
                 </div>
               </div>
-              <h2 className="font-heading font-black text-2xl text-slate-100">{user.hunterName}</h2>
+              <h2 className="font-heading font-black text-2xl text-slate-100">{normalizeHunterName(user.hunterName)}</h2>
               <div className="text-xs text-cyan-400 font-mono-tech mt-0.5">{user.hunterClass}</div>
               <div className="mt-2 inline-block px-3 py-1 rounded-full bg-purple-950/80 border border-purple-500/40 text-purple-300 text-xs font-semibold">
                 Title: {user.currentTitle}
@@ -122,7 +127,7 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
                 soundManager.playSfx('click');
                 onSetTitle(e.target.value);
               }}
-              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-200 font-mono-tech"
+              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-200 font-mono-tech cursor-pointer"
             >
               {titles.map((t) => (
                 <option key={t.title} value={t.title}>
@@ -177,7 +182,7 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
                           onAllocateStat(key);
                         }}
                         className={`
-                          flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold font-heading uppercase transition-all
+                          flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold font-heading uppercase transition-all cursor-pointer
                           ${user.statPoints > 0 
                             ? 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-[0_0_12px_rgba(6,182,212,0.4)]' 
                             : 'bg-slate-800 text-slate-500 cursor-not-allowed'}
@@ -219,8 +224,36 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
               })}
             </div>
           </div>
+
+          {/* Settings & Reset Progress Area */}
+          {onOpenResetModal && (
+            <div className="glass-panel rounded-xl p-6 border border-rose-500/20 bg-gradient-to-r from-slate-900/80 via-rose-950/20 to-slate-900/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="font-heading font-bold text-base text-rose-300 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-400" />
+                  <span>PROGRESS MANAGEMENT & SYSTEM RESET</span>
+                </div>
+                <p className="text-xs text-slate-400 font-mono-tech max-w-lg">
+                  Reset your Hunter Level, XP, quests, dungeon victories, and skills back to Level 1 (F-Rank). Your Google account login remains unaffected.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('click');
+                  onOpenResetModal();
+                }}
+                className="py-2.5 px-4 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/40 hover:border-rose-400 text-rose-200 font-heading font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-[0_0_15px_rgba(244,63,94,0.2)]"
+              >
+                <Trash2 className="w-4 h-4 text-rose-400" />
+                <span>Reset Progress</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
+
