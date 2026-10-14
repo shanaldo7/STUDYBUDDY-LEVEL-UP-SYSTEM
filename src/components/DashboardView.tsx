@@ -14,13 +14,18 @@ import {
   BookOpen,
   Target,
   AlertTriangle,
-  Network
+  Network,
+  Zap,
+  Coins,
+  Shield,
+  Award
 } from 'lucide-react';
 import { soundManager } from '../utils/audio';
 import { ScrollReveal } from './ScrollReveal';
 import { getWeakTopics } from '../utils/progressCalculator';
 import { normalizeHunterName } from '../utils/hunterIdentity';
 import { NavTab } from './Navigation';
+import { DarkSoulsHoloCard } from './threeui/DarkSoulsHoloCard';
 
 interface DashboardViewProps {
   user: HunterUser;
@@ -32,6 +37,7 @@ interface DashboardViewProps {
   onNavigate: (tab: NavTab) => void;
   onAllocateStat: (statName: keyof HunterUser['stats']) => void;
   onTriggerLevelUpPreview?: () => void;
+  onOpenCardCustomizer?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -43,7 +49,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectGate,
   onNavigate,
   onAllocateStat,
-  onTriggerLevelUpPreview
+  onTriggerLevelUpPreview,
+  onOpenCardCustomizer
 }) => {
   const questIcons: Record<string, React.ElementType> = {
     Brain: Brain,
@@ -163,85 +170,231 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </ScrollReveal>
       )}
 
-      {/* Grid: Stats Overview & Quick Hunter Attributes */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Hunter License & Attribute Matrix */}
-        <ScrollReveal threshold={0.1} staggerIndex={0} className="lg:col-span-1">
-          <div className="h-full glass-panel rounded-xl p-5 border border-cyan-500/20 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-              <div>
-                <span className="text-[11px] font-mono-tech text-cyan-400 uppercase tracking-widest font-semibold">HUNTER LICENSE</span>
-                <h3 className="font-heading font-bold text-xl text-slate-100">{normalizeHunterName(user.hunterName)}</h3>
-                <span className="text-xs text-slate-400">{user.hunterClass}</span>
+      {/* ThreeUI Dark Souls Holographic Card — "The Ashen One" */}
+      <ScrollReveal threshold={0.05}>
+        <div className="glass-panel rounded-xl p-5 sm:p-6 border border-amber-500/30 bg-gradient-to-br from-[#120d07] via-[#1a120c] to-[#0a0705] shadow-[0_0_40px_-10px_rgba(245,158,11,0.25)] flex flex-col lg:flex-row items-center gap-6">
+          <div className="w-full lg:w-1/2 space-y-4">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-mono-tech font-bold uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              THREEUI HOLOGRAPHIC CARD — THE ASHEN ONE
+            </div>
+            <h2 className="font-monarch font-bold text-2xl text-slate-100">
+              HUNTER HOLOGRAPHIC CODENAME: {normalizeHunterName(user.hunterName)}
+            </h2>
+            <p className="text-xs text-slate-300 font-mono-tech leading-relaxed">
+              Equipped with the WebGL interactive 3D holographic shader frame. Experience dual-face flipping, 360° drag rotation, pointer tilt, and dynamic foil reflection.
+            </p>
+            <div className="grid grid-cols-2 gap-3 font-mono-tech text-xs pt-2">
+              <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
+                <span className="text-slate-400 text-[10px] block">RANK CLASSIFICATION</span>
+                <span className="text-amber-400 font-bold text-base">RANK {user.hunterRank}</span>
               </div>
-              <div className="text-right">
-                <span className="font-monarch font-extrabold text-2xl text-amber-400">
+              <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
+                <span className="text-slate-400 text-[10px] block">LEVEL & PROGRESS</span>
+                <span className="text-cyan-400 font-bold text-base">LV. {user.level} ({Math.min(100, Math.round((user.xp/user.xpNext)*100))}%)</span>
+              </div>
+            </div>
+            {onOpenCardCustomizer && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('click');
+                  onOpenCardCustomizer();
+                }}
+                className="mt-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-heading font-bold text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(245,158,11,0.3)] cursor-pointer flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Customize Holo Card Studio</span>
+              </button>
+            )}
+          </div>
+
+          <div className="w-full lg:w-1/2 flex justify-center py-2">
+            <div className="w-full max-w-xs sm:max-w-sm aspect-[3/4] relative">
+              <DarkSoulsHoloCard 
+                variant="ashen-one" 
+                theme={user.cardTheme || 'ashen-cinder'}
+                user={user}
+                interactive={true}
+                showControls={true}
+                onOpenCustomizer={onOpenCardCustomizer}
+              />
+            </div>
+          </div>
+        </div>
+      </ScrollReveal>
+
+      {/* Hunter Status & Cognitive Attribute Matrix */}
+      <ScrollReveal threshold={0.05}>
+        <div className="glass-panel rounded-xl p-5 sm:p-6 border border-cyan-500/30 bg-gradient-to-br from-[#070c1a] via-[#0b1329] to-[#120d24] shadow-[0_0_35px_-10px_rgba(6,182,212,0.25)]">
+          {/* Header row: Identity, Rank Badge, Level, Title */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between pb-5 mb-5 border-b border-cyan-500/20 gap-4">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className={`w-16 h-16 rounded-xl border flex items-center justify-center font-monarch font-black text-2xl tracking-wider shadow-lg ${
+                  user.hunterRank === 'S' ? 'border-amber-400 bg-amber-950/60 text-amber-300 shadow-amber-500/30' :
+                  user.hunterRank === 'A' ? 'border-purple-400 bg-purple-950/60 text-purple-300 shadow-purple-500/30' :
+                  user.hunterRank === 'B' ? 'border-indigo-400 bg-indigo-950/60 text-indigo-300 shadow-indigo-500/30' :
+                  user.hunterRank === 'C' ? 'border-cyan-400 bg-cyan-950/60 text-cyan-300 shadow-cyan-500/30' :
+                  user.hunterRank === 'D' ? 'border-emerald-400 bg-emerald-950/60 text-emerald-300 shadow-emerald-500/30' :
+                  'border-slate-500 bg-slate-900/60 text-slate-300 shadow-slate-500/20'
+                }`}>
                   {user.hunterRank}
-                </span>
-                <div className="text-[10px] font-mono-tech text-slate-400">RANK</div>
+                </div>
+                <div className="absolute -inset-1 rounded-xl border border-cyan-400/30 anime-pulse-aura pointer-events-none" />
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-heading font-black text-2xl text-slate-100">
+                    {normalizeHunterName(user.hunterName)}
+                  </h2>
+                  <span className="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 font-mono-tech text-xs font-bold">
+                    LV.{user.level}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-400 font-mono-tech flex items-center gap-2 mt-0.5">
+                  <span className="text-cyan-400 font-semibold">{user.hunterClass}</span>
+                  <span>·</span>
+                  <span className="italic text-purple-300">{user.currentTitle}</span>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex justify-between items-center text-xs font-mono-tech text-slate-400">
-                <span>CORE ATTRIBUTES</span>
-                {user.statPoints > 0 ? (
-                  <span className="text-amber-300 font-bold animate-pulse">
-                    +{user.statPoints} STAT POINTS AVAILABLE
-                  </span>
-                ) : (
-                  <span>POINTS ALLOCATED</span>
-                )}
-              </div>
+            {/* Quick Action buttons */}
+            <div className="flex items-center gap-3">
+              {user.statPoints > 0 && (
+                <div className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-300 font-mono-tech text-xs font-bold flex items-center gap-1.5 animate-pulse">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>+{user.statPoints} UNASSIGNED STAT POINTS</span>
+                </div>
+              )}
+              <button
+                onClick={() => onNavigate('character')}
+                className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-heading font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Character Sheet →
+              </button>
+            </div>
+          </div>
 
-              {statLabels.map(({ key, label, desc, icon }) => {
-                const val = user.stats[key];
-                return (
-                  <div key={key} className="p-2 rounded bg-slate-900/60 border border-slate-800/80 hover:border-cyan-500/30 transition-all flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-base">{icon}</span>
-                      <div>
-                        <div className="text-xs font-bold text-slate-200">{label}</div>
-                        <div className="text-[10px] text-slate-500">{desc}</div>
-                      </div>
+          {/* Gauges row: XP Progression & Mana Core */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            {/* XP Progression Bar */}
+            <div className="p-3.5 rounded-lg bg-slate-900/80 border border-purple-500/20">
+              <div className="flex justify-between items-center text-xs font-mono-tech mb-1.5">
+                <span className="text-purple-300 font-bold flex items-center gap-1">
+                  <Award className="w-3.5 h-3.5" /> LEVEL PROGRESSION
+                </span>
+                <span className="text-slate-300">
+                  {user.xp.toLocaleString()} / {user.xpNext.toLocaleString()} XP ({Math.min(100, Math.round((user.xp / user.xpNext) * 100))}%)
+                </span>
+              </div>
+              <div className="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden border border-purple-500/30">
+                <div 
+                  className="h-full bg-gradient-to-r from-purple-600 via-indigo-500 to-cyan-400 transition-all duration-500 ease-out"
+                  style={{ width: `${Math.min(100, Math.round((user.xp / user.xpNext) * 100))}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Mana Core Bar */}
+            <div className="p-3.5 rounded-lg bg-slate-900/80 border border-cyan-500/20">
+              <div className="flex justify-between items-center text-xs font-mono-tech mb-1.5">
+                <span className="text-cyan-300 font-bold flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5" /> MANA CORE CAPACITY
+                </span>
+                <span className="text-slate-300">
+                  {user.mana} / {user.maxMana} MP
+                </span>
+              </div>
+              <div className="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden border border-cyan-500/30">
+                <div 
+                  className="h-full bg-gradient-to-r from-cyan-600 to-blue-400 transition-all duration-300"
+                  style={{ width: `${Math.min(100, Math.round((user.mana / user.maxMana) * 100))}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 5 Cognitive Attributes Grid with Allocation Buttons */}
+          <div>
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-xs font-mono-tech text-cyan-400 font-bold uppercase tracking-wider">
+                CORE ATTRIBUTE MATRIX
+              </span>
+              <span className="text-[11px] font-mono-tech text-slate-400">
+                Click + to assign available stat points
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {statLabels.map((stat) => (
+                <div 
+                  key={stat.key}
+                  className="p-3 rounded-lg bg-slate-950/70 border border-slate-800 hover:border-cyan-500/40 transition-colors flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-heading font-bold text-slate-200 flex items-center gap-1.5">
+                        <span>{stat.icon}</span>
+                        <span>{stat.label}</span>
+                      </span>
+                      <span className="font-mono-tech font-bold text-base text-cyan-300">
+                        {user.stats[stat.key]}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono-tech font-bold text-sm text-cyan-300">{val}</span>
-                      {user.statPoints > 0 && (
-                        <button
-                          onClick={() => {
-                            soundManager.playSfx('click');
-                            onAllocateStat(key);
-                          }}
-                          className="w-5 h-5 rounded bg-cyan-600/30 hover:bg-cyan-500 border border-cyan-400/50 text-white flex items-center justify-center text-xs transition-colors"
-                          title={`Allocate point to ${label}`}
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      )}
+                    <div className="text-[11px] text-slate-400 leading-tight">
+                      {stat.desc}
                     </div>
                   </div>
-                );
-              })}
+
+                  <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-end">
+                    <button
+                      disabled={user.statPoints <= 0}
+                      onClick={() => {
+                        soundManager.playSfx('levelup');
+                        onAllocateStat(stat.key);
+                      }}
+                      className={`px-2.5 py-1 rounded text-xs font-mono-tech font-bold flex items-center gap-1 transition-all ${
+                        user.statPoints > 0
+                          ? 'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 cursor-pointer shadow-[0_0_10px_rgba(245,158,11,0.3)] hover:scale-105'
+                          : 'bg-slate-900 border border-slate-800 text-slate-600 cursor-not-allowed'
+                      }`}
+                    >
+                      <Plus className="w-3 h-3" /> Assign +1
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-            <span>Title: <i className="text-purple-300">{user.currentTitle}</i></span>
-            <button 
-              onClick={() => onNavigate('character')} 
-              className="text-cyan-400 hover:underline flex items-center gap-1 font-mono-tech text-[11px]"
-            >
-              Full Profile <ArrowRight className="w-3 h-3" />
-            </button>
+          {/* Vitals & Summary Strip */}
+          <div className="mt-5 pt-4 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center font-mono-tech text-xs">
+            <div className="p-2.5 rounded-lg bg-slate-900/50 border border-slate-800/60">
+              <div className="text-slate-400 text-[10px] uppercase">Study Minutes</div>
+              <div className="text-sm font-bold text-purple-300 mt-0.5">{user.totalStudyMinutes.toLocaleString()} MIN</div>
+            </div>
+            <div className="p-2.5 rounded-lg bg-slate-900/50 border border-slate-800/60">
+              <div className="text-slate-400 text-[10px] uppercase">Gates Cleared</div>
+              <div className="text-sm font-bold text-cyan-300 mt-0.5">{user.gatesCleared} RAIDS</div>
+            </div>
+            <div className="p-2.5 rounded-lg bg-slate-900/50 border border-slate-800/60">
+              <div className="text-slate-400 text-[10px] uppercase">Active Streak</div>
+              <div className="text-sm font-bold text-amber-300 mt-0.5">🔥 {user.streakDays} DAYS</div>
+            </div>
+            <div className="p-2.5 rounded-lg bg-slate-900/50 border border-slate-800/60">
+              <div className="text-slate-400 text-[10px] uppercase">Gold Balance</div>
+              <div className="text-sm font-bold text-yellow-300 mt-0.5">💰 {user.gold.toLocaleString()} G</div>
+            </div>
           </div>
-          </div>
-        </ScrollReveal>
+        </div>
+      </ScrollReveal>
 
-        {/* Daily Quests List */}
-        <ScrollReveal threshold={0.1} staggerIndex={1} className="lg:col-span-2">
-          <div className="h-full glass-panel rounded-xl p-5 border border-cyan-500/20">
+      {/* Daily System Mandate Quests */}
+      <ScrollReveal threshold={0.1}>
+        <div className="glass-panel rounded-xl p-5 border border-cyan-500/20">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
             <div>
               <span className="text-[11px] font-mono-tech text-purple-400 uppercase tracking-widest font-semibold">DAILY SYSTEM MANDATE</span>
@@ -258,7 +411,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {dailyQuests.map((quest) => {
               const Icon = questIcons[quest.icon] || Sparkles;
               const isReadyToClaim = quest.completed && !quest.claimed;
@@ -340,9 +493,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               );
             })}
           </div>
-          </div>
-        </ScrollReveal>
-      </div>
+        </div>
+      </ScrollReveal>
 
       {/* Active Dungeon Gates Section */}
       <ScrollReveal threshold={0.1}>

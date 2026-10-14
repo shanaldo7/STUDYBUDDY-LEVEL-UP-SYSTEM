@@ -89,6 +89,8 @@ export interface HunterUser {
   gatesCleared: number;
   email?: string;
   avatarUrl?: string;
+  customMotto?: string;
+  cardTheme?: 'ashen-cinder' | 'monarch-void' | 'glacial-runes' | 'golden-sovereign' | 'crimson-berserk';
 }
 
 export interface DailyQuest {
@@ -162,6 +164,22 @@ export interface ShadowSoldier {
   extractedFrom: string;
   perkDescription: string;
   unlockedAt: string;
+  // Character-specific holographic attributes
+  rank?: 'E' | 'D' | 'C' | 'B' | 'A' | 'S' | 'S+';
+  level?: number;
+  stats?: {
+    strength: number;
+    agility: number;
+    intelligence: number;
+    vitality: number;
+    sense: number;
+  };
+  abilityName?: string;
+  abilityDescription?: string;
+  theme?: 'ashen-cinder' | 'monarch-void' | 'glacial-runes' | 'golden-sovereign' | 'crimson-berserk';
+  isUnlocked?: boolean;
+  motto?: string;
+  lore?: string;
 }
 
 export interface SkillNode {

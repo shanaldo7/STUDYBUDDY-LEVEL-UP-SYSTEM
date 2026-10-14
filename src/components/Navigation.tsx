@@ -114,12 +114,12 @@ export const Navigation: React.FC<NavigationProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xl">⚔️</span>
-                <span className="font-monarch font-extrabold text-lg tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-indigo-300 to-purple-400">
-                  STUDYBUDDY
+                <span className="font-monarch font-extrabold text-base tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-indigo-300 to-purple-400">
+                  STUDYBUDDY: LEVEL UP
                 </span>
               </div>
-              <div className="text-[10px] font-mono-tech tracking-widest text-cyan-400/80 mt-0.5">
-                MONARCH HUNTER PROTOCOL
+              <div className="text-[10px] font-mono-tech tracking-wider text-cyan-400/80 mt-0.5">
+                gamified study planner
               </div>
             </div>
             {/* Close button on mobile drawer */}

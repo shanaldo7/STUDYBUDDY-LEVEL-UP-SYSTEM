@@ -25,7 +25,8 @@ import {
   initialQuestions, 
   initialSkills, 
   initialFlashcards, 
-  initialExams 
+  initialExams,
+  initialShadows
 } from './data/initialData';
 import { getDefaultAIConfig } from './utils/gemini';
 import { 
@@ -38,6 +39,7 @@ import {
 import { enrichSyllabusWithProgress } from './utils/progressCalculator';
 import { Header } from './components/Header';
 import { Navigation, NavTab } from './components/Navigation';
+import { HunterCommandDeck } from './components/HunterCommandDeck';
 import { DashboardView } from './components/DashboardView';
 import { ProgressionWebView } from './components/ProgressionWebView';
 import { SyllabusView } from './components/SyllabusView';
@@ -58,11 +60,12 @@ import { ProgressCalendarView } from './components/ProgressCalendarView';
 import { UserGuideView } from './components/UserGuideView';
 import { SystemNotificationModal, SystemNotification } from './components/SystemNotificationModal';
 import { CinematicBackground } from './components/CinematicBackground';
-import { ScrollProgress } from './components/ScrollProgress';
 import { LoginScreen } from './components/LoginScreen';
 import { OnboardingModal } from './components/OnboardingModal';
 import { WelcomeBackModal } from './components/WelcomeBackModal';
 import { ResetConfirmModal } from './components/ResetConfirmModal';
+import { HunterDock } from './components/HunterDock';
+import { CardCustomizerModal } from './components/CardCustomizerModal';
 import { soundManager } from './utils/audio';
 
 export default function App() {
@@ -78,7 +81,7 @@ export default function App() {
   const [user, setUser] = useState<HunterUser>(() => createFreshHunterUser());
   const [dailyQuests, setDailyQuests] = useState<DailyQuest[]>(() => createFreshDailyQuests());
   const [questions, setQuestions] = useState<QuizQuestion[]>(() => initialQuestions);
-  const [shadows, setShadows] = useState<ShadowSoldier[]>([]);
+  const [shadows, setShadows] = useState<ShadowSoldier[]>(() => initialShadows);
   const [skills, setSkills] = useState<SkillNode[]>(() => initialSkills);
   const [flashcards, setFlashcards] = useState<Flashcard[]>(() => initialFlashcards);
   const [exams, setExams] = useState<ExamMilestone[]>(() => initialExams);
@@ -122,6 +125,33 @@ export default function App() {
     } catch {
       // Ignore
     }
+  };
+
+  // 3D Hunter Navigation & Customizer Overlay States
+  const [isCommandDeckOpen, setIsCommandDeckOpen] = useState<boolean>(false);
+  const [isCardCustomizerOpen, setIsCardCustomizerOpen] = useState<boolean>(false);
+  const [isInspectingWorld, setIsInspectingWorld] = useState<boolean>(false);
+
+  // Global Keyboard Shortcut for Command Deck (Cmd+K / Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        soundManager.playSfx('click');
+        setIsCommandDeckOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Update Hunter 3D Holographic Card settings
+  const handleUpdateUserCard = (updated: Partial<HunterUser>) => {
+    setUser(prev => {
+      const next = { ...prev, ...updated };
+      scheduleCloudSync(next);
+      return next;
+    });
   };
 
   // System notification modal state
@@ -630,31 +660,25 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#05070f] text-slate-100 flex flex-col font-sans relative overflow-x-hidden">
-      {/* Anime Dark-Fantasy Background & Particle Canvas */}
-      <CinematicBackground />
+    <div className="min-h-screen bg-[#040612] text-slate-100 flex flex-col font-sans relative overflow-x-hidden">
+      {/* Top Application Header */}
+      <Header
+        user={user}
+        onOpenCharacterSheet={() => setCurrentTab('character')}
+        isMuted={isMuted}
+        onToggleMute={() => {
+          const next = !isMuted;
+          setIsMuted(next);
+          soundManager.setMuted(next);
+        }}
+        onLogout={handleLogout}
+      />
 
-      {/* Top Anime Scroll Progress Indicator */}
-      <ScrollProgress containerRef={mainContainerRef} />
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Ambient Cinematic Background */}
+        <CinematicBackground />
 
-      {/* Top Header */}
-      <div className="relative z-20">
-        <Header
-          user={user}
-          onOpenCharacterSheet={() => setCurrentTab('character')}
-          isMuted={isMuted}
-          onToggleMute={() => {
-            const next = !isMuted;
-            setIsMuted(next);
-            soundManager.setMuted(next);
-          }}
-          onLogout={handleLogout}
-        />
-      </div>
-
-      {/* Main Layout Area */}
-      <div className="flex-1 flex flex-col lg:flex-row max-w-full relative z-10">
-        {/* Navigation Sidebar */}
+        {/* Responsive Sidebar Navigation */}
         <Navigation
           currentTab={currentTab}
           onSelectTab={(tab) => {
@@ -664,12 +688,12 @@ export default function App() {
             }
           }}
           isOpenMobile={isMobileMenuOpen}
-          onToggleMobile={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          onToggleMobile={() => setIsMobileMenuOpen(prev => !prev)}
           unclaimedQuestsCount={unclaimedQuestsCount}
         />
 
         {/* Dynamic View Container */}
-        <main ref={mainContainerRef} className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto scroll-smooth relative">
+        <main ref={mainContainerRef} className="flex-1 p-3 sm:p-6 lg:p-8 overflow-y-auto scroll-smooth relative z-10 max-w-7xl mx-auto w-full">
           {currentTab === 'dashboard' && (
             <DashboardView
               user={user}
@@ -683,6 +707,7 @@ export default function App() {
               }}
               onNavigate={(tab) => setCurrentTab(tab as NavTab)}
               onAllocateStat={handleAllocateStat}
+              onOpenCardCustomizer={() => setIsCardCustomizerOpen(true)}
               onTriggerLevelUpPreview={() => {
                 soundManager.playSfx('levelup');
                 setNotification({
@@ -794,6 +819,7 @@ export default function App() {
               onAllocateStat={handleAllocateStat}
               onSetTitle={(title) => setUser(prev => ({ ...prev, currentTitle: title }))}
               onOpenResetModal={() => setIsResetModalOpen(true)}
+              onOpenCardCustomizer={() => setIsCardCustomizerOpen(true)}
             />
           )}
 
@@ -885,6 +911,58 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* Interactive 3D Hunter Dock */}
+      <HunterDock
+        currentTab={currentTab}
+        onSelectTab={(tab) => {
+          setCurrentTab(tab);
+          if (tab !== 'dungeon') {
+            setActiveDungeonGate(undefined);
+          }
+        }}
+        onOpenCommandDeck={() => setIsCommandDeckOpen(true)}
+        unclaimedQuestsCount={unclaimedQuestsCount}
+      />
+
+      {/* Searchable Command Deck / Hunter Grimoire Overlay (⌘K) */}
+      <HunterCommandDeck
+        isOpen={isCommandDeckOpen}
+        onClose={() => setIsCommandDeckOpen(false)}
+        onSelectTab={(tab) => {
+          setCurrentTab(tab);
+          if (tab !== 'dungeon') {
+            setActiveDungeonGate(undefined);
+          }
+        }}
+        onOpenCardCustomizer={() => setIsCardCustomizerOpen(true)}
+        onTriggerLevelUpPreview={() => {
+          soundManager.playSfx('levelup');
+          setNotification({
+            isOpen: true,
+            type: 'levelup',
+            title: `HUNTER AWAKENING: LEVEL UP (LV.${user.level + 1})!`,
+            message: `A sudden influx of mana surges through your consciousness. All cognitive faculties sharpen, unlocking +3 Stat Points and expanding your Mana Core.`,
+            subtext: `Rank ${user.hunterRank} · Threshold Next: ${(user.xpNext * 1.3).toLocaleString()} XP`,
+            bonusPoints: 3
+          });
+        }}
+        onOpenResetModal={() => setIsResetModalOpen(true)}
+        isMuted={isMuted}
+        onToggleMute={() => {
+          const next = !isMuted;
+          setIsMuted(next);
+          soundManager.setMuted(next);
+        }}
+      />
+
+      {/* 3D Holographic Card Customizer Studio */}
+      <CardCustomizerModal
+        isOpen={isCardCustomizerOpen}
+        user={user}
+        onClose={() => setIsCardCustomizerOpen(false)}
+        onSave={handleUpdateUserCard}
+      />
 
       {/* Onboarding Modal for First-Time Users */}
       {showOnboarding && (

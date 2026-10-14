@@ -7,6 +7,7 @@ class SoundManager {
   private ctx: AudioContext | null = null;
   private ambientGain: GainNode | null = null;
   private ambientSources: AudioNode[] = [];
+  private rainFilter: BiquadFilterNode | null = null;
   private isMuted: boolean = false;
 
   private initCtx() {
@@ -22,7 +23,7 @@ class SoundManager {
   }
 
   // Play short sound effect
-  playSfx(type: 'click' | 'attack' | 'critical' | 'victory' | 'levelup' | 'arise' | 'damage') {
+  playSfx(type: 'click' | 'attack' | 'critical' | 'victory' | 'levelup' | 'arise' | 'damage' | 'flip' | 'glint') {
     if (this.isMuted) return;
     try {
       this.initCtx();
@@ -108,6 +109,30 @@ class SoundManager {
           g.connect(this.ctx.destination);
           o.start(now + idx * 0.09);
           o.stop(now + 0.85);
+        });
+      } else if (type === 'flip') {
+        // Crisp holographic card flip whoosh
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(150, now + 0.15);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+        osc.start(now);
+        osc.stop(now + 0.16);
+      } else if (type === 'glint') {
+        // High crystalline shimmer / glint
+        [1200, 1800, 2400].forEach((f, idx) => {
+          if (!this.ctx) return;
+          const o = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(f, now + idx * 0.04);
+          g.gain.setValueAtTime(0.08, now + idx * 0.04);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          o.connect(g);
+          g.connect(this.ctx.destination);
+          o.start(now + idx * 0.04);
+          o.stop(now + 0.35);
         });
       }
     } catch {
@@ -201,7 +226,8 @@ class SoundManager {
 
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.value = 800;
+        filter.frequency.value = 850;
+        this.rainFilter = filter;
 
         noise.connect(filter);
         filter.connect(masterGain);
@@ -211,6 +237,17 @@ class SoundManager {
     } catch {
       // Audio not permitted
     }
+  }
+
+  setRainIntensity(intensity: 'light' | 'moderate' | 'heavy' | 'storm') {
+    if (!this.rainFilter || !this.ctx) return;
+    const freq = {
+      light: 500,
+      moderate: 850,
+      heavy: 1250,
+      storm: 1750
+    }[intensity];
+    this.rainFilter.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.4);
   }
 
   stopAmbient() {
@@ -224,6 +261,7 @@ class SoundManager {
       }
     });
     this.ambientSources = [];
+    this.rainFilter = null;
   }
 
   setMuted(muted: boolean) {

@@ -23,13 +23,15 @@ interface CharacterViewProps {
   onAllocateStat: (statName: keyof HunterUser['stats']) => void;
   onSetTitle: (title: string) => void;
   onOpenResetModal?: () => void;
+  onOpenCardCustomizer?: () => void;
 }
 
 export const CharacterView: React.FC<CharacterViewProps> = ({
   user,
   onAllocateStat,
   onSetTitle,
-  onOpenResetModal
+  onOpenResetModal,
+  onOpenCardCustomizer
 }) => {
   const titles = [
     { title: 'Monarch of Knowledge', bonus: '+15% Concept Mastery & Intelligence' },
@@ -224,6 +226,33 @@ export const CharacterView: React.FC<CharacterViewProps> = ({
               })}
             </div>
           </div>
+
+          {/* 3D Holo Card Customizer Studio Banner */}
+          {onOpenCardCustomizer && (
+            <div className="glass-panel rounded-xl p-6 border border-cyan-500/30 bg-gradient-to-r from-slate-900/80 via-cyan-950/20 to-slate-900/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="font-heading font-bold text-base text-cyan-300 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-cyan-400" />
+                  <span>3D HOLOGRAPHIC CARD STUDIO & FOIL CUSTOMIZER</span>
+                </div>
+                <p className="text-xs text-slate-400 font-mono-tech max-w-lg">
+                  Customize your Hunter ID card appearance, foil holographic sheen, and rarity themes.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playSfx('click');
+                  onOpenCardCustomizer();
+                }}
+                className="py-2.5 px-4 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 hover:border-cyan-400 text-cyan-200 font-heading font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+              >
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                <span>Customize Card</span>
+              </button>
+            </div>
+          )}
 
           {/* Settings & Reset Progress Area */}
           {onOpenResetModal && (

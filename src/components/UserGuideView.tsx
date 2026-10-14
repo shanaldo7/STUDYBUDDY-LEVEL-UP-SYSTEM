@@ -485,6 +485,37 @@ export const UserGuideView: React.FC<UserGuideViewProps> = ({ onNavigate }) => {
                 </div>
               </div>
 
+              <div className="p-4 bg-slate-900/60 border border-amber-500/30 rounded-xl space-y-3">
+                <h4 className="font-bold text-xs text-amber-300 uppercase tracking-wider font-mono-tech flex items-center justify-between">
+                  <span className="flex items-center gap-2">✨ 3D Holographic Profile Card ("The Ashen One" & 5 Shader Themes)</span>
+                  <span className="text-[10px] text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">ThreeUI Inspired WebGL</span>
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Your hunter identity is immortalized on a high-fidelity interactive 3D holographic card powered by WebGL and custom GLSL-inspired shaders. Features include:
+                </p>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                  <li><strong>Pointer 3D Tilt:</strong> Card shifts and angles with realistic perspective as you move your mouse or finger.</li>
+                  <li><strong>360° Drag Rotation:</strong> Drag across the card to orbit and inspect metallic edges and iridescent foil.</li>
+                  <li><strong>Double-Click Card Flip:</strong> Flips between the Front artwork plate and the Back Hunter Codex attributes radar.</li>
+                  <li><strong>5 Elemental Themes:</strong> Choose between <em>Ashen Cinder</em>, <em>Monarch Void</em>, <em>Glacial Runes</em>, <em>Golden Sovereign</em>, and <em>Crimson Berserk</em> with theme-matched ambient motes.</li>
+                  <li><strong>Card Customizer Studio:</strong> Click "Theme" on the card or "Customize 3D Card" to personalize your name, title, rank, inscribed motto, and shader colors with real-time 3D preview!</li>
+                </ul>
+              </div>
+
+              <div className="p-4 bg-slate-900/60 border border-cyan-500/30 rounded-xl space-y-2">
+                <h4 className="font-bold text-xs text-cyan-300 uppercase tracking-wider font-mono-tech flex items-center gap-2">
+                  <span>⚡</span> 3D Hunter Navigation: Floating Bar, Bottom Dock & Grimoire (⌘K)
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  The permanent sidebar has been upgraded to a sleek 3D gaming HUD:
+                </p>
+                <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside">
+                  <li><strong>Floating 3D Top Bar:</strong> Displays your live Rank, Level, XP progression bar, Mana core, daily streak, and audio toggles.</li>
+                  <li><strong>Interactive 3D Bottom Dock:</strong> Game HUD floating dock with 3D bounce effects, active rune glow, and notification badges for rapid hub hopping.</li>
+                  <li><strong>Hunter Grimoire / Command Deck (⌘K):</strong> Press <kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-cyan-400">Ctrl+K</kbd> or <kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-cyan-400">Cmd+K</kbd> anywhere in the app to instantly search and teleport across all 17 system operations with your keyboard!</li>
+                </ul>
+              </div>
+
               <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2">
                 <h4 className="font-bold text-xs text-cyan-300 uppercase tracking-wider font-mono-tech">
                   Equipment & Loadout

@@ -26,7 +26,9 @@ export function createFreshHunterUser(email?: string, name?: string): HunterUser
     lastActiveDate: new Date().toISOString(),
     gold: 0,
     totalStudyMinutes: 0,
-    gatesCleared: 0
+    gatesCleared: 0,
+    customMotto: 'Only those who endure the darkness may reign over shadows.',
+    cardTheme: 'ashen-cinder'
   };
 }
 
@@ -436,7 +438,22 @@ export const initialShadows: ShadowSoldier[] = [
     powerBonus: 750,
     extractedFrom: 'Red Throne Monarch Trial',
     perkDescription: '+25% XP bonus in Algorithm & Logic Dungeon Raids',
-    unlockedAt: '2026-09-12'
+    unlockedAt: '2026-09-12',
+    rank: 'A',
+    level: 45,
+    stats: {
+      strength: 88,
+      agility: 96,
+      intelligence: 45,
+      vitality: 82,
+      sense: 70
+    },
+    abilityName: 'Bloodred Bladestorm',
+    abilityDescription: 'Executes continuous supersonic slashes that bypass algorithmic complexity and accelerate problem solving.',
+    theme: 'crimson-berserk',
+    isUnlocked: true,
+    motto: 'My blade is the sovereign decree. None shall stand in your path.',
+    lore: 'An ancient knight clad in crimson armor who guarded the empty monarch throne for centuries until answering your awakening call.'
   },
   {
     id: 'shadow_tank',
@@ -446,7 +463,22 @@ export const initialShadows: ShadowSoldier[] = [
     powerBonus: 480,
     extractedFrom: 'Glacial Core Abyss',
     perkDescription: 'Absorbs first wrong answer penalty per dungeon encounter',
-    unlockedAt: '2026-09-18'
+    unlockedAt: '2026-09-18',
+    rank: 'D',
+    level: 32,
+    stats: {
+      strength: 94,
+      agility: 36,
+      intelligence: 28,
+      vitality: 108,
+      sense: 52
+    },
+    abilityName: 'Glacial Permafrost Aegis',
+    abilityDescription: 'Freezes acute exam panic and shields the cognitive core from stress-induced errors.',
+    theme: 'glacial-runes',
+    isUnlocked: true,
+    motto: 'Roars that shatter the coldest frost of doubt.',
+    lore: 'A colossal arctic beast from the frozen depths whose dense ice pelt absorbs cognitive shockwaves.'
   },
   {
     id: 'shadow_iron',
@@ -456,7 +488,101 @@ export const initialShadows: ShadowSoldier[] = [
     powerBonus: 390,
     extractedFrom: 'Demon Castle Ramparts',
     perkDescription: '+15% Mana pool during Focus Room pomodoro sessions',
-    unlockedAt: '2026-09-24'
+    unlockedAt: '2026-09-24',
+    rank: 'E',
+    level: 24,
+    stats: {
+      strength: 86,
+      agility: 25,
+      intelligence: 32,
+      vitality: 95,
+      sense: 42
+    },
+    abilityName: 'Shield of Iron Will',
+    abilityDescription: 'Taunts study exhaustion and creates a fortress of enduring concentration.',
+    theme: 'ashen-cinder',
+    isUnlocked: true,
+    motto: 'Unbroken defense against fatigue and distraction.',
+    lore: 'A hulking armored warrior whose enormous shield and battle axe form an impenetrable wall.'
+  }
+];
+
+export const allExtractableShadowsCatalog: ShadowSoldier[] = [
+  ...initialShadows,
+  {
+    id: 'shadow_silad',
+    name: 'Glacial Ice Sovereign Beast',
+    grade: 'Elite Knight',
+    type: 'Elemental Beast',
+    powerBonus: 950,
+    extractedFrom: 'Frost Monarch Silad Trial (Rank B)',
+    perkDescription: '+30% Critical Answer strike rate in Science & Physics',
+    unlockedAt: '',
+    rank: 'B',
+    level: 55,
+    stats: {
+      strength: 98,
+      agility: 78,
+      intelligence: 72,
+      vitality: 115,
+      sense: 88
+    },
+    abilityName: 'Absolute Zero Entropy Freeze',
+    abilityDescription: 'Commands blizzard mana to crystallize physics formulas and thermodynamic proofs in memory.',
+    theme: 'glacial-runes',
+    isUnlocked: false,
+    motto: 'Where temperature drops, absolute focus solidifies.',
+    lore: 'Summoned from the sovereign realm of absolute zero, this frost predator moves like a blizzard.'
+  },
+  {
+    id: 'shadow_architect',
+    name: 'Grand Architect Simulacrum',
+    grade: 'Grand Marshal',
+    type: 'Arcane Construct',
+    powerBonus: 1400,
+    extractedFrom: 'Architect of the System (Double Dungeon)',
+    perkDescription: 'Reveals 1 incorrect option in all Boss & Dungeon questions',
+    unlockedAt: '',
+    rank: 'A',
+    level: 70,
+    stats: {
+      strength: 72,
+      agility: 82,
+      intelligence: 135,
+      vitality: 92,
+      sense: 128
+    },
+    abilityName: 'Geometric Paradox Domain',
+    abilityDescription: 'Manipulates dimensional logic arrays, instantaneously solving mathematical paradoxes and eliminating incorrect options.',
+    theme: 'monarch-void',
+    isUnlocked: false,
+    motto: 'The architecture of destiny answers to knowledge alone.',
+    lore: 'The divine mind construct that designed the system awakening protocol, now serving the Monarch.'
+  },
+  {
+    id: 'shadow_kamish',
+    name: 'Kamish Shadow Dragon Wyrm',
+    grade: 'Grand Marshal',
+    type: 'Dragon Wyrm',
+    powerBonus: 2000,
+    extractedFrom: 'Shadow Dragon Kamish (Rank S+ Calamity)',
+    perkDescription: '+50% XP and Gold from all Mastered Curriculum Topics',
+    unlockedAt: '',
+    rank: 'S+',
+    level: 90,
+    stats: {
+      strength: 155,
+      agility: 120,
+      intelligence: 105,
+      vitality: 165,
+      sense: 140
+    },
+    abilityName: 'Cataclysmic Dragonbreath',
+    abilityDescription: 'Incinerates procrastination and unleashes boundless cognitive energy across all academic subjects.',
+    theme: 'golden-sovereign',
+    isUnlocked: false,
+    motto: 'None shall burn brighter than the flame of mastery.',
+    lore: 'The supreme dragon whose roar once shook humanity\'s greatest hunters. Extracted into the ultimate shadow sovereign companion.'
   }
 ];
 
